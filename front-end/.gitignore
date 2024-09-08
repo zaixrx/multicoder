@@ -1,0 +1,5 @@
+/node_modules
+/public
+vite.config.ts
+tsconfig.node.json
+tsconfig.app.json
