@@ -1,34 +1,46 @@
-import { Socket } from "./socketTypes";
+import { Server, Socket } from "socket.io";
+import { Appdata, EventHandler } from "./socketTypes";
+import roomConnection from "./roomConnection";
+import roomCommunication from "./roomCommunication";
 
-const connectedSockets: Socket<any, any>[] = [];
+const app: Appdata = {
+  sockets: [],
+  rooms: [],
+};
 
-const eventHandlers = (server: any) => {
-  const io = require("socket.io")(server, {
-    cors: {
-      origin: "*",
-    },
-  });
+export default (io: Server) => {
+  io.on("connection", (currentSocket: Socket) => {
+    const handlers: EventHandler[] = [
+      roomConnection(app, currentSocket),
+      roomCommunication(app, currentSocket),
+    ];
 
-  io.on("connection", (socket: Socket<any, any>) => {
-    const index = connectedSockets.length;
-
-    socket.emit("helloMessage", {});
-    socket.on("helloMessageReceived", (data) => {
-      console.log("Connected Client", data);
-      connectedSockets.push(socket);
+    handlers.forEach((handler) => {
+      for (const eventName in handler) {
+        currentSocket.on(eventName, handler[eventName]);
+      }
     });
 
-    socket.on("mouseMoveEvent", (mouseData) => {
-      connectedSockets.forEach((connectedSocket) => {
-        if (connectedSocket === socket) return;
-        connectedSocket.emit("connectedSocket", mouseData);
+    const index = app.sockets.length;
+
+    currentSocket.on("disconnect", () => {
+      app.sockets.splice(index, 1);
+      console.log(currentSocket.id, "left");
+      const roomsToDelete: number[] = [];
+      app.rooms.forEach((room, index) => {
+        const member = room.members.find((m) => m.id === currentSocket.id);
+        if (member) {
+          room.members.splice(room.members.indexOf(member), 1);
+        }
+        if (room.members.length === 0) roomsToDelete.push(index);
+      });
+      roomsToDelete.forEach((roomIndex) => {
+        app.rooms.splice(roomIndex, 1);
+        console.log("deleted a room");
       });
     });
 
-    socket.on("disconnect", () => {
-      connectedSockets.splice(index, 1);
-    });
+    app.sockets.push(currentSocket);
+    currentSocket.emit("welcomeSent", currentSocket.id);
   });
 };
-
-export default eventHandlers;

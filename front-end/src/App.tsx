@@ -1,75 +1,60 @@
-import { useState, useEffect } from "react";
-import CodeArea, { Line } from "./components/CodeArea";
-import Console, { Command } from "./components/Console";
+import { useState, useEffect, createContext } from "react";
+import CodeEditor, { MousePosition } from "./components/CodeEditor";
 import "./design.css";
-
-import { io, Socket } from "socket.io-client";
-
-type MousePosition = {
-  x: number;
-  y: number;
-};
+import ConnectionHub from "./components/ConnectionHub";
+import {
+  makeConnection,
+  sendRoomJoinRequest,
+} from "./utils/socketEventHandler";
+import { Socket } from "socket.io-client";
 
 let socket: Socket;
+export const RoomContext = createContext<any>(undefined);
 
 export default function App() {
-  const [mousePositon, setMousePosition] = useState<MousePosition>({
-    x: 0,
-    y: 0,
-  });
-  const [loadedSocket, setLoadedSocket] = useState<Boolean>(false);
+  const [room, setRoom] = useState<Room>({ id: "", members: [] });
+  const [socketId, setSocketId] = useState<string>("");
 
   useEffect(() => {
-    if (loadedSocket) return;
+    socket = makeConnection();
 
-    try {
-      socket = io("ws://127.0.0.1:3000");
+    socket.on("welcomeSent", (socketId) => {
+      setSocketId(socketId);
+    });
 
-      socket.on("helloMessage", () => {
-        socket.emit("helloMessageReceived", "ana anis");
-        setLoadedSocket(true);
-      });
+    socket.on("roomJoinRequest", (clientWhoRequestedToJoinId: string) => {
+      socket.emit("roomJoinResponse", clientWhoRequestedToJoinId, true);
+    });
 
-      socket.on("mouseMoveEvent", (data) => {
-        console.log("Mouse Moved:", data);
-      });
-
-      setInterval(() => {
-        socket.emit("mouseMoveEvent", {
-          xPosition: mousePositon.x,
-          yPosition: mousePositon.y,
-        });
-      }, 1000);
-    } catch {
-      console.log("Could not connect");
-    }
+    socket.on("roomCreated", (_room: Room) => {
+      setRoom(_room);
+    });
   }, []);
 
-  function handleCodeCompilation(lines: Line[]) {
-    let code = "";
-    lines.map((line) => line.code && (code += `${line.code}\n`));
-    try {
-      eval(code);
-      addCommand({ text: "Compiled With Success!" });
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        addCommand({ text: error.toString() });
-      }
-    }
-  }
-
-  const [addCommand, setAddCommand] = useState<Function>(() => () => {});
-  function handleGetAddCommandTriggerd(addCommandFunction: Function) {
-    setAddCommand(() => (command: Command) => addCommandFunction(command));
-  }
-
   return (
-    <div
-      tabIndex={0}
-      onMouseMove={(e) => setMousePosition({ x: e.clientX, y: e.clientY })}
-    >
-      <Console onGetAddCommandTriggerd={handleGetAddCommandTriggerd} />
-      <CodeArea onCompile={(lines: Line[]) => handleCodeCompilation(lines)} />
-    </div>
+    <main tabIndex={0}>
+      <span>Socket Id: {socketId}</span>
+      {room.id ? (
+        <RoomContext.Provider value={[room, setRoom, socket, socketId]}>
+          <CodeEditor />
+        </RoomContext.Provider>
+      ) : (
+        <ConnectionHub
+          onClientConnect={(socketToConnectToId: string) =>
+            sendRoomJoinRequest(socketToConnectToId)
+          }
+        />
+      )}
+    </main>
   );
 }
+
+export type Member = {
+  id: string;
+  mousePosition: MousePosition;
+};
+
+export type Room = {
+  id: string;
+  members: Member[];
+};

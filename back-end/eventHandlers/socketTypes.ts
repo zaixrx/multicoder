@@ -1,4 +1,11 @@
-export interface Socket<OnData, EmitData> {
-  on(event: string, callback: (data: OnData) => void): void;
-  emit(event: string, data: EmitData): void;
-}
+import { Socket } from "socket.io";
+import { Room } from "./roomConnection";
+
+export type EventHandler = {
+  [key: string]: (...params: any) => void;
+};
+
+export type Appdata = {
+  sockets: Socket[];
+  rooms: Room[];
+};

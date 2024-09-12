@@ -1,30 +1,25 @@
 import { useEffect, useState } from "react";
 
-export interface Command {
-  text: string;
-}
-
 interface ConsoleProps {
-  onGetAddCommandTriggerd: Function;
+  getConsolePrintLine: Function;
 }
 
-function Console({
-  onGetAddCommandTriggerd: getAddCommandFunctionRefrence,
-}: ConsoleProps) {
-  const [commands, setCommands] = useState<Command[]>([]);
+function Console({ getConsolePrintLine }: ConsoleProps) {
+  const [consoleLines, setConsoleLines] = useState<string[]>([]);
 
   useEffect(() => {
-    getAddCommandFunctionRefrence(addCommand);
+    getConsolePrintLine(printConsoleLine);
   }, []);
 
-  function addCommand(command: Command) {
-    if (command) setCommands([...commands, command]);
+  function printConsoleLine(consoleLine: string) {
+    if (!consoleLine) return;
+    setConsoleLines([...consoleLines, consoleLine]);
   }
 
   return (
     <div className="console">
-      {commands.map((command, index) => (
-        <div key={index}>$ {command.text}</div>
+      {consoleLines.map((consoleLine, index) => (
+        <div key={index}>$ {consoleLine}</div>
       ))}
     </div>
   );
