@@ -12,6 +12,7 @@ import MouseCursor from "./MouseCursor";
 let consolePrintLine: Function;
 let myMousePosition: MousePosition = { x: 0, y: 0 };
 let myKeysPressedBuffer: string[] = [];
+let keysPressedByClient: string[] = [];
 
 export const CodeEditorContext = createContext<any>(undefined);
 
@@ -52,7 +53,11 @@ function CodeEditor() {
 
     socket.on("keysPressed", (_socketId: string, keysPressed: string[]) => {
       keysPressed.forEach((key: string) => {
-        handleKeyDown(key);
+        setSelectedLine((lineIndex) => {
+          handleKeyDown(key, lineIndex);
+          keysPressedByClient.push(key);
+          return lineIndex;
+        });
       });
     });
   }, []);
@@ -103,7 +108,7 @@ function CodeEditor() {
           onCompile={compileCode}
           onKeyDown={(key: string) => {
             myKeysPressedBuffer.push(key);
-            handleKeyDown(key);
+            handleKeyDown(key, selectedLine);
           }}
           moveCursor={moveCursor}
         />
@@ -122,13 +127,16 @@ function CodeEditor() {
   );
 
   function appendCodeToLine(line: Line, code: string): Line {
-    line.code =
-      line.code.slice(0, cursorPosition.column) +
-      code.toString() +
-      line.code.slice(cursorPosition.column, line.code.length);
-    setCursorPosition({
-      line: selectedLine,
-      column: cursorPosition.column + code.length,
+    setCursorPosition((previousCursorPosition) => {
+      line.code =
+        line.code.slice(0, previousCursorPosition.column) +
+        code.toString() +
+        line.code.slice(previousCursorPosition.column, line.code.length);
+
+      return {
+        line: previousCursorPosition.line,
+        column: previousCursorPosition.column + code.length,
+      };
     });
     return line;
   }
@@ -140,23 +148,37 @@ function CodeEditor() {
       line.code.slice(0, charachterIndex - 1) +
       line.code.slice(charachterIndex, line.code.length);
 
-    setCursorPosition({
-      line: selectedLine,
+    setCursorPosition((previousCursorPosition) => ({
+      line: previousCursorPosition.line,
       column: charachterIndex - 1,
-    });
+    }));
 
     return line;
   }
 
   function addLine(linesReplica: Line[]) {
-    linesReplica.splice(cursorPosition.line, 0, { code: "" });
-    moveCursor(linesReplica.length, cursorPosition.column, linesReplica);
+    setCursorPosition((previousCursorPosition) => {
+      linesReplica.splice(previousCursorPosition.line, 0, { code: "" });
+      moveCursor(
+        linesReplica.length,
+        previousCursorPosition.column,
+        linesReplica
+      );
+      return previousCursorPosition || { column: 0, line: 0 };
+    });
   }
 
   function deleteLine(lineNumber: number, linesReplica: Line[]) {
-    if (lines.length <= 1 || lineNumber > lines.length) return;
-    linesReplica.splice(lineNumber - 1, 1);
-    moveCursor(linesReplica.length, cursorPosition.column, linesReplica);
+    if (linesReplica.length <= 1 || lineNumber > linesReplica.length) return;
+    setCursorPosition((previousCursorPosition) => {
+      linesReplica.splice(lineNumber - 1, 1);
+      moveCursor(
+        linesReplica.length,
+        previousCursorPosition.column,
+        linesReplica
+      );
+      return previousCursorPosition;
+    });
   }
 
   function moveCursor(
@@ -182,61 +204,86 @@ function CodeEditor() {
     });
   }
 
-  function handleKeyDown(key: string) {
-    const _lines = [...lines];
-    let line = _lines[selectedLine - 1];
+  function handleKeyDown(key: string, selectedLine: number) {
+    setLines((previousLines) => {
+      const _lines = [...previousLines];
+      let line = _lines[selectedLine - 1];
 
-    switch (key) {
-      case "Backspace":
-        if (line.code.length === 0) deleteLine(selectedLine, _lines);
-        else deleteSingleCharacter(line, cursorPosition.column);
-        break;
+      switch (key) {
+        case "Backspace":
+          if (line.code.length === 0) deleteLine(selectedLine, _lines);
+          else {
+            setCursorPosition((previousCursorPosition) => {
+              deleteSingleCharacter(line, previousCursorPosition.column);
+              return previousCursorPosition || { column: 0, line: 0 };
+            });
+          }
+          break;
 
-      case "Enter":
-        addLine(_lines);
-        break;
+        case "Enter":
+          addLine(_lines);
+          break;
 
-      case "ArrowUp":
-        moveCursor(selectedLine - 1, cursorPosition.column, _lines);
-        break;
+        case "ArrowUp":
+          setCursorPosition((previousCursorPosition) => {
+            moveCursor(selectedLine - 1, previousCursorPosition.column, _lines);
+            return previousCursorPosition;
+          });
+          break;
 
-      case "ArrowDown":
-        moveCursor(selectedLine + 1, cursorPosition.column, _lines);
-        break;
+        case "ArrowDown":
+          setCursorPosition((previousCursorPosition) => {
+            moveCursor(selectedLine + 1, previousCursorPosition.column, _lines);
+            return previousCursorPosition;
+          });
+          break;
 
-      case "ArrowRight":
-        moveCursor(cursorPosition.line, cursorPosition.column + 1, _lines);
-        break;
+        case "ArrowRight":
+          setCursorPosition((previousCursorPosition) => {
+            moveCursor(selectedLine, previousCursorPosition.column + 1, _lines);
+            return previousCursorPosition;
+          });
+          break;
 
-      case "ArrowLeft":
-        moveCursor(cursorPosition.line, cursorPosition.column - 1, _lines);
-        break;
+        case "ArrowLeft":
+          setCursorPosition((previousCursorPosition) => {
+            moveCursor(selectedLine, previousCursorPosition.column - 1, _lines);
+            return previousCursorPosition;
+          });
+          break;
 
-      case "Home":
-        moveCursor(cursorPosition.line, 0, _lines);
-        break;
+        case "Home":
+          setCursorPosition((previousCursorPosition) => ({
+            line: previousCursorPosition.line,
+            column: 0,
+          }));
+          break;
 
-      case "End":
-        moveCursor(cursorPosition.line, Infinity, _lines);
-        break;
+        case "End":
+          setCursorPosition((previousCursorPosition) => ({
+            line: previousCursorPosition.line,
+            column: line.code.length,
+          }));
+          break;
 
-      case "Alt":
-      case "AltGraph":
-      case "Control":
-      case "CapsLock":
-      case "Escape":
-        break;
+        case "Alt":
+        case "AltGraph":
+        case "Control":
+        case "CapsLock":
+        case "Escape":
+          break;
 
-      case "Tab":
-        appendCodeToLine(line, "  ");
-        break;
+        case "Tab":
+          appendCodeToLine(line, "  ");
+          break;
 
-      default:
-        appendCodeToLine(line, key);
-        break;
-    }
+        default:
+          appendCodeToLine(line, key);
+          break;
+      }
 
-    setLines(_lines);
+      return _lines;
+    });
   }
 }
 
@@ -255,3 +302,5 @@ export type CursorPosition = {
   line: number;
   column: number;
 };
+
+let number = 0;
