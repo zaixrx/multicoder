@@ -1,6 +1,8 @@
 import { Children, cloneElement, useEffect, useState } from "react";
 import Queue from "../utils/queue";
 
+const animationTime = 0.1;
+
 type InterpolaterProps = {
   children: any;
   positionBuffer: Queue<Vector2>;
@@ -38,7 +40,7 @@ function Interpolater({ children, positionBuffer }: InterpolaterProps) {
         return position;
       });
 
-      if (t < 1) {
+      if (t < animationTime) {
         requestAnimationFrame(animate);
       }
     };

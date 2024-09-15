@@ -23,8 +23,6 @@ let myMousePosition: Vector2 = { x: 0, y: 0 };
 let myMouseClicksBuffer: MouseClick[] = [];
 let myKeysPressedBuffer: string[] = [];
 
-let currentKeyIndex: number = 0;
-let previousKeyIndex: number = 0;
 let init: boolean = false;
 
 export default function CodeArea({ onCompile }: CodeAreaPropsType) {
@@ -38,7 +36,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
   useEffect(() => {
     initializeSocketEventHandlers();
-    setInterval(heartBeat, 1000 / 20);
+    setInterval(heartBeat, 1000 / 30);
   }, []);
 
   function initializeSocketEventHandlers() {
@@ -121,112 +119,118 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     cursorPosition.column = charachterIndex - 1;
   }
 
-  function addLine(lines: Line[], cursorPosition: CursorPosition) {
+  function addLine(
+    lines: Line[],
+    cursorPosition: CursorPosition
+  ): CursorPosition {
     lines.splice(cursorPosition.line, 0, { code: "" });
-    moveCursor(lines.length, cursorPosition.column, lines, cursorPosition);
+    return moveCursor(
+      { line: lines.length, column: cursorPosition.column },
+      cursorPosition,
+      lines
+    );
   }
 
-  function deleteLine(lines: Line[], cursorPosition: CursorPosition) {
-    if (lines.length <= 1 || cursorPosition.line > lines.length) return;
+  function deleteLine(
+    lines: Line[],
+    cursorPosition: CursorPosition
+  ): CursorPosition {
+    if (lines.length <= 1 || cursorPosition.line > lines.length)
+      return cursorPosition;
     lines.splice(cursorPosition.line - 1, 1);
-    moveCursor(lines.length, Infinity, lines, cursorPosition);
+    let returnValue = moveCursor(
+      { line: lines.length, column: Infinity },
+      cursorPosition,
+      lines
+    );
+    console.log("return value", returnValue);
+    return returnValue;
   }
 
   function handleKeyDown(key: string) {
-    currentKeyIndex++;
-
     setEditorData((prevEditorData: EditorData) => {
-      previousKeyIndex++;
+      let { lines, cursorPosition } = { ...prevEditorData };
+      let line: Line = lines[cursorPosition.line - 1];
 
-      if (previousKeyIndex !== currentKeyIndex) {
-        previousKeyIndex = currentKeyIndex;
-        return prevEditorData;
+      if (line) {
+        switch (key) {
+          case "Backspace":
+            if (line.code.length === 0)
+              cursorPosition = deleteLine(lines, cursorPosition);
+            else deleteSingleCharacter(line, cursorPosition);
+            break;
+
+          case "Enter":
+            cursorPosition = addLine(lines, cursorPosition);
+            break;
+
+          case "ArrowUp":
+            cursorPosition = moveCursor(
+              { line: cursorPosition.line - 1, column: cursorPosition.column },
+              cursorPosition,
+              lines
+            );
+            break;
+
+          case "ArrowDown":
+            cursorPosition = moveCursor(
+              { line: cursorPosition.line + 1, column: cursorPosition.column },
+              cursorPosition,
+              lines
+            );
+            break;
+
+          case "ArrowRight":
+            cursorPosition = moveCursor(
+              { line: cursorPosition.line, column: cursorPosition.column + 1 },
+              cursorPosition,
+              lines
+            );
+            break;
+
+          case "ArrowLeft":
+            cursorPosition = moveCursor(
+              { line: cursorPosition.line, column: cursorPosition.column - 1 },
+              cursorPosition,
+              lines
+            );
+            break;
+
+          case "Home":
+            cursorPosition = moveCursor(
+              { line: cursorPosition.line, column: 0 },
+              cursorPosition,
+              lines
+            );
+            break;
+
+          case "End":
+            cursorPosition = moveCursor(
+              { line: cursorPosition.line, column: line.code.length },
+              cursorPosition,
+              lines
+            );
+            break;
+
+          case "Alt":
+          case "AltGraph":
+          case "Shift":
+          case "Control":
+          case "CapsLock":
+          case "Escape":
+            break;
+
+          case "Tab":
+            appendCodeToLine(line, "  ", cursorPosition);
+            break;
+
+          default:
+            appendCodeToLine(line, key, cursorPosition);
+            break;
+        }
       }
 
-      console.log(currentKeyIndex, previousKeyIndex);
-
-      const editorData = { ...prevEditorData };
-
-      const { lines, cursorPosition } = editorData;
-      let line = lines[cursorPosition.line - 1];
-
-      switch (key) {
-        case "Backspace":
-          if (line.code.length === 0) deleteLine(lines, cursorPosition);
-          else deleteSingleCharacter(line, cursorPosition);
-          break;
-
-        case "Enter":
-          addLine(lines, cursorPosition);
-          break;
-
-        case "ArrowUp":
-          moveCursor(
-            cursorPosition.line - 1,
-            cursorPosition.column,
-            lines,
-            cursorPosition
-          );
-          break;
-
-        case "ArrowDown":
-          moveCursor(
-            cursorPosition.line + 1,
-            cursorPosition.column,
-            lines,
-            cursorPosition
-          );
-          break;
-
-        case "ArrowRight":
-          moveCursor(
-            cursorPosition.line,
-            cursorPosition.column + 1,
-            lines,
-            cursorPosition
-          );
-          break;
-
-        case "ArrowLeft":
-          moveCursor(
-            cursorPosition.line,
-            cursorPosition.column - 1,
-            lines,
-            cursorPosition
-          );
-          break;
-
-        case "Home":
-          moveCursor(cursorPosition.line, 0, lines, cursorPosition);
-          break;
-
-        case "End":
-          moveCursor(
-            cursorPosition.line,
-            line.code.length,
-            lines,
-            cursorPosition
-          );
-          break;
-
-        case "Alt":
-        case "AltGraph":
-        case "Shift":
-        case "Control":
-        case "CapsLock":
-        case "Escape":
-          break;
-
-        case "Tab":
-          appendCodeToLine(line, "  ", cursorPosition);
-          break;
-
-        default:
-          appendCodeToLine(line, key, cursorPosition);
-          break;
-      }
-
-      return editorData;
+      return { lines, cursorPosition };
     });
   }
 
@@ -244,27 +248,21 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }
 
   function moveCursor(
-    verticalPosition: number,
-    horizontalPosition: number,
-    lines: Line[],
-    cursorPosition: CursorPosition
-  ) {
-    if (
-      horizontalPosition < 0 ||
-      verticalPosition <= 0 ||
-      verticalPosition > lines.length
-    )
-      return;
+    desiredPosition: CursorPosition,
+    cursorPosition: CursorPosition,
+    lines: Line[]
+  ): CursorPosition {
+    if (desiredPosition.column < 0 || desiredPosition.line <= 0)
+      return cursorPosition;
 
-    horizontalPosition = Math.min(
-      horizontalPosition,
-      lines[verticalPosition - 1].code.length
+    desiredPosition.column = Math.min(
+      desiredPosition.column,
+      lines[desiredPosition.line - 1].code.length
     );
 
-    cursorPosition = {
-      line: verticalPosition,
-      column: horizontalPosition,
-    };
+    desiredPosition.line = Math.min(desiredPosition.line, lines.length);
+
+    return desiredPosition;
   }
 
   return (
@@ -282,6 +280,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
       <div
         tabIndex={0}
         onKeyDown={(e) => {
+          e.preventDefault();
           myKeysPressedBuffer.push(e.key);
           handleKeyDown(e.key);
         }}
@@ -297,12 +296,15 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           {editorData.lines.map((line: Line, index: number) => (
             <pre
               onMouseDown={(e) => {
-                moveCursor(
-                  index + 1,
-                  Math.ceil((e.clientX - 42) / 9),
-                  editorData.lines,
-                  editorData.cursorPosition
+                const _editorData = { ...editorData };
+
+                _editorData.cursorPosition = moveCursor(
+                  { column: Math.ceil((e.clientX - 42) / 9), line: index + 1 },
+                  editorData.cursorPosition,
+                  editorData.lines
                 );
+
+                setEditorData(_editorData);
               }}
               key={index}
               className={`line${

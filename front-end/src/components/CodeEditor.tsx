@@ -15,7 +15,7 @@ export type EditorData = {
 function CodeEditor() {
   let { current: consolePrintLine } = useRef<Function>(() => {});
 
-  const [room, socketId] = useContext(RoomContext);
+  const [room, _setRoom, socket] = useContext(RoomContext);
   const [editorData, setEditorData] = useState<EditorData>({
     lines: [{ code: "" }],
     cursorPosition: { column: 0, line: 1 },
@@ -50,20 +50,22 @@ function CodeEditor() {
       >
         <CodeArea onCompile={compileCode} />
       </CodeEditorContext.Provider>
-      {room.members.map((member: Member, index: number) => {
-        console.log(member.id, socketId);
-        if (member.id === socketId) return;
-        return (
-          <Interpolater key={index} positionBuffer={member.mousePositionBuffer}>
-            <MouseCursor
-              position={{
-                x: 0,
-                y: 0,
-              }}
-            />
-          </Interpolater>
-        );
-      })}
+      {room.members.map(
+        (member: Member, index: number) =>
+          member.id !== socket.id && (
+            <Interpolater
+              key={index}
+              positionBuffer={member.mousePositionBuffer}
+            >
+              <MouseCursor
+                position={{
+                  x: 0,
+                  y: 0,
+                }}
+              />
+            </Interpolater>
+          )
+      )}
     </>
   );
 }

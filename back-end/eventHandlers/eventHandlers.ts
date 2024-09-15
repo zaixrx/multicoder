@@ -41,6 +41,5 @@ export default (io: Server) => {
     });
 
     app.sockets.push(currentSocket);
-    currentSocket.emit("welcomeSent", currentSocket.id);
   });
 };

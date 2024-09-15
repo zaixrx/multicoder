@@ -10,47 +10,46 @@ import { Socket } from "socket.io-client";
 import Queue from "./utils/queue";
 import { Vector2 } from "./common/Interpolater";
 
-let socket: Socket;
 export const RoomContext = createContext<any>(undefined);
 
 export default function App() {
+  const [socket, setSocket] = useState<Socket | undefined>();
   const [room, setRoom] = useState<Room>({ id: "", members: [] });
-  const [socketId, setSocketId] = useState<string>("");
 
   useEffect(() => {
-    socket = makeConnection();
-
-    socket.on("welcomeSent", (socketId) => {
-      setSocketId(socketId);
-    });
-
-    socket.on("roomJoinRequest", (clientWhoRequestedToJoinId: string) => {
-      socket.emit("roomJoinResponse", clientWhoRequestedToJoinId, true);
-    });
-
-    socket.on("roomCreated", (_room: Room) => {
-      _room.members.forEach((member) => {
-        member.mousePositionBuffer = new Queue<Vector2>();
+    let socket = makeConnection();
+    socket.on("connect", () => {
+      socket.on("roomJoinRequest", (clientWhoRequestedToJoinId: string) => {
+        socket.emit("roomJoinResponse", clientWhoRequestedToJoinId, true);
       });
-      setRoom(_room);
+
+      socket.on("roomCreated", (_room: Room) => {
+        _room.members.forEach((member) => {
+          member.mousePositionBuffer = new Queue<Vector2>();
+        });
+        setRoom(_room);
+      });
+      setSocket(socket);
     });
   }, []);
 
   return (
-    <main tabIndex={0}>
-      <span>Socket Id: {socketId}</span>
-      {room.id ? (
-        <RoomContext.Provider value={[room, setRoom, socket, socketId]}>
-          <CodeEditor />
-        </RoomContext.Provider>
-      ) : (
-        <ConnectionHub
-          onClientConnect={(socketToConnectToId: string) =>
-            sendRoomJoinRequest(socketToConnectToId)
-          }
-        />
-      )}
-    </main>
+    socket && (
+      <main tabIndex={0}>
+        <span>Socket Id: {socket.id}</span>
+        {room.id ? (
+          <RoomContext.Provider value={[room, setRoom, socket]}>
+            <CodeEditor />
+          </RoomContext.Provider>
+        ) : (
+          <ConnectionHub
+            onClientConnect={(socketToConnectToId: string) =>
+              sendRoomJoinRequest(socketToConnectToId)
+            }
+          />
+        )}
+      </main>
+    )
   );
 }
 
