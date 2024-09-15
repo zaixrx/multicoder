@@ -1,14 +1,15 @@
-interface MouseCursorProps {
-  x: number;
-  y: number;
-}
+import { Vector2 } from "../common/Interpolater";
 
-function MouseCursor({ x, y }: MouseCursorProps) {
+type MouseCursorProps = {
+  position: Vector2;
+};
+
+function MouseCursor({ position }: MouseCursorProps) {
   return (
     <div
       className="mouse-cursor translate-middle"
-      style={{ left: x, top: y }}
-    ></div>
+      style={{ left: position.x, top: position.y }}
+    />
   );
 }
 

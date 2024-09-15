@@ -1,5 +1,5 @@
 import { useState, useEffect, createContext } from "react";
-import CodeEditor, { MousePosition } from "./components/CodeEditor";
+import CodeEditor from "./components/CodeEditor";
 import "./design.css";
 import ConnectionHub from "./components/ConnectionHub";
 import {
@@ -7,6 +7,8 @@ import {
   sendRoomJoinRequest,
 } from "./utils/socketEventHandler";
 import { Socket } from "socket.io-client";
+import Queue from "./utils/queue";
+import { Vector2 } from "./common/Interpolater";
 
 let socket: Socket;
 export const RoomContext = createContext<any>(undefined);
@@ -27,6 +29,9 @@ export default function App() {
     });
 
     socket.on("roomCreated", (_room: Room) => {
+      _room.members.forEach((member) => {
+        member.mousePositionBuffer = new Queue<Vector2>();
+      });
       setRoom(_room);
     });
   }, []);
@@ -51,7 +56,7 @@ export default function App() {
 
 export type Member = {
   id: string;
-  mousePosition: MousePosition;
+  mousePositionBuffer: Queue<Vector2>;
 };
 
 export type Room = {

@@ -1,4 +1,4 @@
-import { CursorPosition } from "./CodeArea";
+import { CursorPosition } from "./CodeEditor";
 
 export interface CursorPropsType {
   position: CursorPosition;
