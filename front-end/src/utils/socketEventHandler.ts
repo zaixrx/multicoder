@@ -18,7 +18,7 @@ export function sendMousePosition(roomId: string, mousePosition: Vector2) {
 
 export function sendKeysPressedBuffer(
   roomId: string,
-  keysPressedBuffer: string[]
+  keysPressedBuffer: { key: string; isShifting: boolean }[]
 ) {
   socket.emit("keysPressed", roomId, keysPressedBuffer);
 }

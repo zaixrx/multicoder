@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext } from "react";
+import { useState, useEffect, createContext, useRef } from "react";
 import CodeEditor from "./components/CodeEditor";
 import "./design.css";
 import ConnectionHub from "./components/ConnectionHub";
@@ -15,6 +15,9 @@ export const RoomContext = createContext<any>(undefined);
 export default function App() {
   const [socket, setSocket] = useState<Socket | undefined>();
   const [room, setRoom] = useState<Room>({ id: "", members: [] });
+
+  const consoleOutput = useRef<HTMLDivElement>(null);
+  const outputFrameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     let socket = makeConnection();
@@ -33,21 +36,44 @@ export default function App() {
     });
   }, []);
 
+  function compileCode(code: string) {
+    if (!outputFrameRef.current) return;
+    outputFrameRef.current.srcdoc = `
+                <html>
+                <body>
+                    <script>
+                        try {
+                            ${code}
+                        } catch (error) {
+                            document.body.innerHTML = '<pre>' + error.toString() + '</pre>';
+                        }
+                    <\/script>
+                </body>
+                </html>
+            `;
+  }
+
   return (
     socket && (
-      <main tabIndex={0}>
-        <span>Socket Id: {socket.id}</span>
-        {room.id ? (
-          <RoomContext.Provider value={[room, setRoom, socket]}>
-            <CodeEditor />
-          </RoomContext.Provider>
-        ) : (
-          <ConnectionHub
-            onClientConnect={(socketToConnectToId: string) =>
-              sendRoomJoinRequest(socketToConnectToId)
-            }
-          />
-        )}
+      <main className="row">
+        <div className="col">
+          <span>Socket Id: {socket.id}</span>
+          {room.id ? (
+            <RoomContext.Provider value={[room, setRoom, socket]}>
+              <CodeEditor onCompile={compileCode} />
+            </RoomContext.Provider>
+          ) : (
+            <ConnectionHub
+              onClientConnect={(socketToConnectToId: string) =>
+                sendRoomJoinRequest(socketToConnectToId)
+              }
+            />
+          )}
+        </div>
+        <div className="col">
+          <div ref={consoleOutput}></div>
+          <iframe ref={outputFrameRef}></iframe>
+        </div>
       </main>
     )
   );

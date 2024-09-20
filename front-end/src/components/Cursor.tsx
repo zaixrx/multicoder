@@ -1,15 +1,12 @@
-import { CursorPosition } from "./CodeEditor";
+import { Vector2 } from "../common/Interpolater";
 
 export interface CursorPropsType {
-  position: CursorPosition;
+  position: Vector2;
 }
 
 function Cursor({ position }: CursorPropsType) {
   return (
-    <div
-      className="cursor-bar"
-      style={{ left: position.column * 9, top: (position.line - 1) * 24 }}
-    />
+    <div className="cursor-bar" style={{ left: position.x, top: position.y }} />
   );
 }
 

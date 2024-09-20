@@ -1,6 +1,5 @@
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import { Member, RoomContext } from "../App";
-import Console from "./Console";
 import CodeArea, { CursorPosition } from "./CodeArea";
 import MouseCursor from "./MouseCursor";
 import Interpolater from "../common/Interpolater";
@@ -8,47 +7,34 @@ import Interpolater from "../common/Interpolater";
 export const CodeEditorContext = createContext<any>(undefined);
 
 export type EditorData = {
-  lines: Line[];
+  lines: string[];
   cursorPosition: CursorPosition;
 };
 
-function CodeEditor() {
-  let { current: consolePrintLine } = useRef<Function>(() => {});
-
+function CodeEditor({ onCompile }: any) {
   const [room, _setRoom, socket] = useContext(RoomContext);
   const [editorData, setEditorData] = useState<EditorData>({
-    lines: [{ code: "" }],
-    cursorPosition: { column: 0, line: 1 },
+    lines: [""],
+    cursorPosition: { column: 0, line: 0 },
   });
-
-  function compileCode() {
-    let code = editorData.lines
-      .map((l) => l.code)
-      .reduce((accumulator, currentValue) => `${accumulator}\n${currentValue}`);
-    try {
-      eval(code);
-      consolePrintLine("Compiled With Success!");
-    } catch (error) {
-      if (error instanceof Error) {
-        consolePrintLine(error.message);
-      }
-    }
-  }
 
   return (
     <>
-      <Console
-        getConsolePrintLine={(_consolePrintLine: Function) =>
-          (consolePrintLine = _consolePrintLine)
-        }
-      />
       <CodeEditorContext.Provider
         value={{
           editorData,
           setEditorData,
         }}
       >
-        <CodeArea onCompile={compileCode} />
+        <CodeArea
+          onCompile={() =>
+            onCompile(
+              editorData.lines.reduce(
+                (accumulator, currentValue) => `${accumulator}\n${currentValue}`
+              )
+            )
+          }
+        />
       </CodeEditorContext.Provider>
       {room.members.map(
         (member: Member, index: number) =>
@@ -71,7 +57,3 @@ function CodeEditor() {
 }
 
 export default CodeEditor;
-
-export type Line = {
-  code: string;
-};

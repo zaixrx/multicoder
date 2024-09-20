@@ -42,7 +42,7 @@ const mousePositionHandler =
 
 const keysPressedHandler =
   (app: Appdata, currentSocket: Socket) =>
-  (roomId: string, keysPressed: string[]) => {
+  (roomId: string, keysPressed: { key: string; isShifting: boolean }[]) => {
     const room = getRoom(app, roomId);
     if (!room) return;
     room.members.forEach((member) => {

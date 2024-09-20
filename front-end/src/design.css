@@ -1,5 +1,5 @@
 * {
-  font-family: Consolas, monaco, monospace;
+  font-family: "JetBrains Mono";
 }
 
 main {
@@ -29,8 +29,7 @@ main {
 }
 
 .line-highlited {
-  color: white;
-  background-color: rgb(0, 0, 0);
+  color: red;
 }
 
 .mouse-cursor {
@@ -43,4 +42,8 @@ main {
 .fill-screen {
   width: 100vw;
   height: 100vh;
+}
+
+.selection {
+  background-color: rgba(0, 120, 215, 0.3);
 }
