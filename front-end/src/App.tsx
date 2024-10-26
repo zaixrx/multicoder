@@ -11,12 +11,17 @@ import Queue from "./utils/queue";
 import { Vector2 } from "./common/Interpolater";
 
 export const RoomContext = createContext<any>(undefined);
+export type RoomContextType = [
+  room: Room,
+  setRoom: React.Dispatch<React.SetStateAction<Room>>,
+  socket: Socket
+];
 
 export default function App() {
   const [socket, setSocket] = useState<Socket | undefined>();
   const [room, setRoom] = useState<Room>({ id: "", members: [] });
 
-  const consoleOutput = useRef<HTMLDivElement>(null);
+  //const consoleOutput = useRef<HTMLDivElement>(null);
   const outputFrameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -55,13 +60,11 @@ export default function App() {
 
   return (
     socket && (
-      <main className="row">
-        <div className="col">
-          <span>Socket Id: {socket.id}</span>
+      <main className="d-flex fill-screen-vertically">
+        <span>Socket Id: {socket.id}</span>
+        <RoomContext.Provider value={[room, setRoom, socket]}>
           {room.id ? (
-            <RoomContext.Provider value={[room, setRoom, socket]}>
-              <CodeEditor onCompile={compileCode} />
-            </RoomContext.Provider>
+            <CodeEditor onCompile={compileCode} />
           ) : (
             <ConnectionHub
               onClientConnect={(socketToConnectToId: string) =>
@@ -69,11 +72,7 @@ export default function App() {
               }
             />
           )}
-        </div>
-        <div className="col">
-          <div ref={consoleOutput}></div>
-          <iframe ref={outputFrameRef}></iframe>
-        </div>
+        </RoomContext.Provider>
       </main>
     )
   );

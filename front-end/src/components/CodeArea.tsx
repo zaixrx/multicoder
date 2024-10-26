@@ -42,6 +42,11 @@ let myMouseClicksBuffer: MouseClick[] = [];
 let myKeysPressedBuffer: { key: string; isShifting: boolean }[] = [];
 let intitializationFlag: boolean = false;
 
+type CursorSelection = {
+  start?: CursorPosition;
+  end?: CursorPosition;
+};
+
 export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   const [room, setRoom, socket] = useContext(RoomContext);
 
@@ -56,10 +61,10 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     { x: 0, y: 0 }
   );
 
-  const [cursorSelection, setCursorSelection] = useState<{
-    start?: CursorPosition;
-    end?: CursorPosition;
-  }>({ start: undefined, end: undefined });
+  const [cursorSelection, setCursorSelection] = useState<CursorSelection>({
+    start: undefined,
+    end: undefined,
+  });
 
   useEffect(() => {
     initializeSocketEventHandlers();
@@ -159,11 +164,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     cursorPosition: CursorPosition
   ): CursorPosition {
     lines.splice(cursorPosition.line + 1, 0, "");
-    return moveCursor(
-      { line: cursorPosition.line + 1, column: cursorPosition.column },
-      cursorPosition,
-      lines
-    );
+    return moveCursor({ line: cursorPosition.line + 1 }, cursorPosition, lines);
   }
 
   function handleKeyDown(key: string, isShifting: boolean) {
@@ -176,10 +177,10 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
       switch (key) {
         case "Backspace":
-          if (line.length)
+          if (line.length) {
             lines[selectedLine] = deleteSingleCharacter(line, cursorPosition);
-          else {
-            if (lines.length - 1) {
+          } else {
+            if (lines.length > 1) {
               lines.splice(selectedLine, 1);
               cursorPosition = {
                 line: selectedLine - 1,
@@ -187,6 +188,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
               };
             }
           }
+
           break;
 
         case "Enter":
@@ -215,7 +217,6 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             cursorPosition,
             lines
           );
-
           setCursorSelection((prevCursorSelection) => {
             let cursorSelection = { ...prevCursorSelection };
 
@@ -318,15 +319,17 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }
 
   function moveCursor(
-    desiredPosition: CursorPosition,
+    desiredPosition: { line?: number; column?: number },
     cursorPosition: CursorPosition,
     lines: string[]
   ): CursorPosition {
+    if (!desiredPosition.line) desiredPosition.line = cursorPosition.line;
+    if (!desiredPosition.column) desiredPosition.column = cursorPosition.column;
+
     if (desiredPosition.column < 0 || desiredPosition.line < 0)
       return cursorPosition;
 
     desiredPosition.line = Math.min(desiredPosition.line, lines.length - 1);
-
     desiredPosition.column = Math.min(
       desiredPosition.column,
       lines[desiredPosition.line].length
@@ -345,17 +348,26 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
     const editor = editorRef.current;
     if (!editor) return { node: null, offset: 0 };
+    // The line might have several children because of the selection
     const children = editor.childNodes[currentCursorLine].childNodes;
+    // We want to make it such that if the element doesn't have any children
+    // we set both the targetNode and the offest to their corresponding places
+    // If a Line existed but it didn't have any text as its children
 
-    for (const child of children) {
-      if (!child.textContent) continue;
-      const textLength = child.textContent.length;
-      if (charCount + textLength >= currentCursorColumn) {
+    if (editor.childNodes[currentCursorLine].childNodes.length) {
+      for (const child of children) {
         targetNode = child;
-        offset = currentCursorColumn - charCount;
-        break;
+        if (child.textContent) {
+          const textLength = child.textContent.length;
+          if (charCount + textLength >= currentCursorColumn) {
+            offset = currentCursorColumn - charCount;
+            break;
+          }
+          charCount += textLength;
+        }
       }
-      charCount += textLength;
+    } else {
+      targetNode = editor.childNodes[currentCursorLine];
     }
 
     return { node: targetNode, offset };
@@ -363,25 +375,29 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
   function updateAbsoluteCursorPosition() {
     if (!editorRef.current) return;
-
-    const range = document.createRange();
-    const selection = window.getSelection();
+    let rect: DOMRect = {} as DOMRect;
 
     const { node, offset } = getNodeAndOffset();
+
     if (!node) return;
 
-    if (node.nodeType === Node.TEXT_NODE) {
-      range.setStart(node, offset);
-    } else if (node.nodeType === Node.ELEMENT_NODE && node.firstChild) {
-      range.setStart(node.firstChild, offset);
+    if (
+      node.nodeType === Node.TEXT_NODE ||
+      (node.nodeType === Node.ELEMENT_NODE && node.firstChild)
+    ) {
+      const range = document.createRange();
+      const selection = window.getSelection();
+
+      range.setStart(node.firstChild || node, offset);
+      range.collapse(true);
+
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      rect = range.getBoundingClientRect();
+    } else {
+      rect = (node as HTMLElement).getBoundingClientRect();
     }
-
-    range.collapse(true);
-
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    const rect = range.getBoundingClientRect();
 
     setAbsoluteCursorPosition({
       x: rect.left,
@@ -393,29 +409,78 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     const getLineClasses = (index: number) =>
       `line ${index === editorData.cursorPosition.line && " line-highlited"}`;
 
-    const start = Math.min(
-      cursorSelection.start?.column || 0,
-      cursorSelection.end?.column || 0
+    const startColumn = Math.min(
+      cursorSelection.end?.column || 0,
+      cursorSelection.start?.column || 0
     );
-    const end = Math.max(
-      cursorSelection.start?.column || 0,
-      cursorSelection.end?.column || 0
+    const endColumn = Math.max(
+      cursorSelection.end?.column || 0,
+      cursorSelection.start?.column || 0
     );
 
-    const hasSelection = start !== end;
+    const startLine = Math.min(
+      cursorSelection.end?.line || 0,
+      cursorSelection.start?.line || 0
+    );
+    const endLine = Math.max(
+      cursorSelection.end?.line || 0,
+      cursorSelection.start?.line || 0
+    );
 
-    return editorData.lines.map((code: string, lineNumber: number) => {
+    return editorData.lines.map((code: string, currentLine: number) => {
       return (
-        <pre key={lineNumber} className={getLineClasses(lineNumber)}>
-          {hasSelection ? (
-            <>
-              {code.slice(0, start)}
-              <span className="selection">{code.slice(start, end)}</span>
-              {code.slice(end)}
-            </>
-          ) : (
-            code
-          )}
+        <pre key={currentLine} className={getLineClasses(currentLine)}>
+          {(() => {
+            if (startLine === currentLine && endLine === currentLine) {
+              let start = Math.min(startColumn || 0, endColumn || 0);
+              let end = Math.max(startColumn || 0, endColumn || 0);
+
+              return (
+                <>
+                  {code.slice(0, start)}
+                  <span className="selection">{code.slice(start, end)}</span>
+                  {code.slice(end)}
+                </>
+              );
+            } else {
+              const startColumn =
+                cursorSelection.start?.line === startLine
+                  ? cursorSelection.start?.column
+                  : cursorSelection.end?.column;
+
+              const endColumn =
+                cursorSelection.end?.line === endLine
+                  ? cursorSelection.end?.column
+                  : cursorSelection.start?.column;
+
+              if (startLine === currentLine) {
+                return (
+                  <>
+                    {code.slice(0, startColumn)}
+                    <span className="selection">{code.slice(startColumn)}</span>
+                  </>
+                );
+              } else if (endLine === currentLine) {
+                return (
+                  <>
+                    <span className="selection">
+                      {code.slice(0, endColumn)}
+                    </span>
+                    {code.slice(endColumn)}
+                  </>
+                );
+              } else if (
+                startLine &&
+                endLine &&
+                startLine < currentLine &&
+                currentLine < endLine
+              ) {
+                return <span className="selection">{code}</span>;
+              }
+            }
+
+            return code;
+          })()}
         </pre>
       );
     });

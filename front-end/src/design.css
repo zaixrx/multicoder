@@ -44,6 +44,10 @@ main {
   height: 100vh;
 }
 
+.fill-screen-vertically {
+  height: 100vh;
+}
+
 .selection {
   background-color: rgba(0, 120, 215, 0.3);
 }
