@@ -39,17 +39,17 @@ export default function App() {
   function compileCode(code: string) {
     if (!outputFrameRef.current) return;
     outputFrameRef.current.srcdoc = `
-                <html>
-                <body>
-                    <script>
-                        try {
-                            ${code}
-                        } catch (error) {
-                            document.body.innerHTML = '<pre>' + error.toString() + '</pre>';
-                        }
-                    <\/script>
-                </body>
-                </html>
+            <html>
+            <body>
+                <script>
+                    try {
+                        ${code}
+                    } catch (error) {
+                        document.body.innerHTML = '<pre>' + error.toString() + '</pre>';
+                    }
+                <\/script>
+            </body>
+            </html>
             `;
   }
 

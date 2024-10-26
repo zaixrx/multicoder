@@ -145,13 +145,26 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }
 
   function deleteSingleCharacter(line: string, cursorPosition: CursorPosition) {
-    let charachterIndex = cursorPosition.column;
-    if (charachterIndex <= 0) return line;
+    if (cursorSelection.start && cursorSelection.end) {
+      const start = Math.min(
+        cursorSelection.start.column || 0,
+        cursorSelection.end.column || 0
+      );
+      const end = Math.max(
+        cursorSelection.start.column || 0,
+        cursorSelection.end.column || 0
+      );
 
-    charachterIndex = Math.min(charachterIndex, line.length);
-    cursorPosition.column = charachterIndex - 1;
+      return line.slice(0, start) + line.slice(end);
+    } else {
+      let charachterIndex = cursorPosition.column;
+      if (charachterIndex <= 0) return line;
 
-    return line.slice(0, charachterIndex - 1) + line.slice(charachterIndex);
+      charachterIndex = Math.min(charachterIndex, line.length);
+      cursorPosition.column = charachterIndex - 1;
+
+      return line.slice(0, charachterIndex - 1) + line.slice(charachterIndex);
+    }
   }
 
   function addLine(
@@ -169,6 +182,8 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   function handleKeyDown(key: string, isShifting: boolean) {
     if (keysToIgnore.includes(key)) return;
 
+    if (!isShifting) setCursorSelection({ start: undefined, end: undefined });
+
     setEditorData((prevEditorData: EditorData) => {
       let { lines, cursorPosition } = { ...prevEditorData };
       const selectedLine = cursorPosition.line;
@@ -179,7 +194,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           if (line.length)
             lines[selectedLine] = deleteSingleCharacter(line, cursorPosition);
           else {
-            if (lines.length - 1) {
+            if (selectedLine && lines.length > 1) {
               lines.splice(selectedLine, 1);
               cursorPosition = {
                 line: selectedLine - 1,
@@ -199,6 +214,29 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             cursorPosition,
             lines
           );
+
+          setCursorSelection((prevCursorSelection) => {
+            let cursorSelection = { ...prevCursorSelection };
+
+            if (isShifting) {
+              if (cursorSelection.start) {
+                cursorSelection.end = cursorPosition;
+              } else {
+                cursorSelection = {
+                  start: {
+                    column: cursorPosition.column - 1,
+                    line: cursorPosition.line,
+                  },
+                  end: {
+                    column: cursorPosition.column,
+                    line: cursorPosition.line,
+                  },
+                };
+              }
+            }
+
+            return cursorSelection;
+          });
           break;
 
         case "ArrowDown":
@@ -207,6 +245,30 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             cursorPosition,
             lines
           );
+
+          setCursorSelection((prevCursorSelection) => {
+            let cursorSelection = { ...prevCursorSelection };
+
+            if (isShifting) {
+              if (cursorSelection.start) {
+                cursorSelection.end = cursorPosition;
+              } else {
+                cursorSelection = {
+                  start: {
+                    column: cursorPosition.column - 1,
+                    line: cursorPosition.line,
+                  },
+                  end: {
+                    column: cursorPosition.column,
+                    line: cursorPosition.line,
+                  },
+                };
+              }
+            }
+
+            return cursorSelection;
+          });
+
           break;
 
         case "ArrowRight":
@@ -234,8 +296,6 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
                   },
                 };
               }
-            } else {
-              cursorSelection = { start: undefined, end: undefined };
             }
 
             return cursorSelection;
@@ -268,8 +328,6 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
                   },
                 };
               }
-            } else {
-              cursorSelection = { start: undefined, end: undefined };
             }
 
             return cursorSelection;
@@ -277,6 +335,27 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           break;
 
         case "Home":
+          if (isShifting) {
+            let intialCursorColumn = cursorPosition.column;
+
+            setCursorSelection((prevCursorSelection) => {
+              let cursorSelection = { ...prevCursorSelection };
+
+              cursorSelection = {
+                start: {
+                  column: intialCursorColumn,
+                  line: cursorPosition.line,
+                },
+                end: {
+                  column: 0,
+                  line: cursorPosition.line,
+                },
+              };
+
+              return cursorSelection;
+            });
+          }
+
           cursorPosition = moveCursor(
             { line: selectedLine, column: 0 },
             cursorPosition,
@@ -285,11 +364,33 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           break;
 
         case "End":
+          if (isShifting) {
+            let intialCursorColumn = cursorPosition.column;
+
+            setCursorSelection((prevCursorSelection) => {
+              let cursorSelection = { ...prevCursorSelection };
+
+              cursorSelection = {
+                start: {
+                  column: intialCursorColumn,
+                  line: cursorPosition.line,
+                },
+                end: {
+                  column: line.length,
+                  line: cursorPosition.line,
+                },
+              };
+
+              return cursorSelection;
+            });
+          }
+
           cursorPosition = moveCursor(
             { line: selectedLine, column: line.length },
             cursorPosition,
             lines
           );
+
           break;
 
         case "Tab":
@@ -393,29 +494,54 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     const getLineClasses = (index: number) =>
       `line ${index === editorData.cursorPosition.line && " line-highlited"}`;
 
-    const start = Math.min(
+    const startColumn = Math.min(
       cursorSelection.start?.column || 0,
       cursorSelection.end?.column || 0
     );
-    const end = Math.max(
+    const endColumn = Math.max(
       cursorSelection.start?.column || 0,
       cursorSelection.end?.column || 0
     );
-
-    const hasSelection = start !== end;
 
     return editorData.lines.map((code: string, lineNumber: number) => {
+      const sameStartLine = cursorSelection.start?.line === lineNumber;
+      const sameEndLine = cursorSelection.end?.line === lineNumber;
+
+      if (sameStartLine && sameEndLine) {
+        return (
+          <pre key={lineNumber} className={getLineClasses(lineNumber)}>
+            <>
+              {code.slice(0, startColumn)}
+              <span className="selection">
+                {code.slice(startColumn, endColumn)}
+              </span>
+              {code.slice(endColumn)}
+            </>
+          </pre>
+        );
+      } else if (sameStartLine && !sameEndLine) {
+        return (
+          <pre key={lineNumber} className={getLineClasses(lineNumber)}>
+            <>
+              {code.slice(0, startColumn)}
+              <span className="selection">{code.slice(startColumn)}</span>
+            </>
+          </pre>
+        );
+      } else if (!sameStartLine && sameEndLine) {
+        return (
+          <pre key={lineNumber} className={getLineClasses(lineNumber)}>
+            <>
+              <span className="selection">{code.slice(0, endColumn)}</span>
+              {code.slice(endColumn)}
+            </>
+          </pre>
+        );
+      }
+
       return (
         <pre key={lineNumber} className={getLineClasses(lineNumber)}>
-          {hasSelection ? (
-            <>
-              {code.slice(0, start)}
-              <span className="selection">{code.slice(start, end)}</span>
-              {code.slice(end)}
-            </>
-          ) : (
-            code
-          )}
+          {code}
         </pre>
       );
     });
