@@ -167,7 +167,51 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     return moveCursor({ line: cursorPosition.line + 1 }, cursorPosition, lines);
   }
 
-  function handleKeyDown(key: string, isShifting: boolean) {
+  function updateCursorSelection(
+    selectionStart: CursorPosition,
+    cursorPosition: CursorPosition,
+    isHoldingShift: boolean
+  ) {
+    console.log("seleciton");
+
+    setCursorSelection((prevCursorSelection) => {
+      let cursorSelection = { ...prevCursorSelection };
+
+      if (isHoldingShift) {
+        if (cursorSelection.start && cursorSelection.end) {
+          const { start, end } = ((): {
+            start: CursorPosition;
+            end: CursorPosition;
+          } => {
+            if (cursorSelection.start.line === cursorPosition.line) {
+              return cursorSelection.start.column <= cursorPosition.column
+                ? { start: cursorSelection.start, end: cursorPosition }
+                : { start: cursorPosition, end: cursorSelection.end };
+            } else {
+              return cursorSelection.start.line <= cursorPosition.line
+                ? { start: cursorSelection.start, end: cursorPosition }
+                : { start: cursorPosition, end: cursorSelection.start };
+            }
+          })();
+
+          cursorSelection = { start, end };
+        } else {
+          const { start, end } =
+            selectionStart.line <= cursorPosition.line
+              ? { start: cursorSelection.start, end: cursorPosition }
+              : { start: cursorPosition, end: cursorSelection.start };
+
+          cursorSelection = { start, end };
+        }
+      } else {
+        cursorSelection = { start: undefined, end: undefined };
+      }
+
+      return cursorSelection;
+    });
+  }
+
+  function handleKeyDown(key: string, isHoldingShift: boolean) {
     if (keysToIgnore.includes(key)) return;
 
     setEditorData((prevEditorData: EditorData) => {
@@ -179,8 +223,6 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
         case "Backspace":
           const { start, end } = cursorSelection;
           if (start && end) {
-            console.log(start.line === currentLine, end.line === currentLine);
-
             if (start.line === currentLine && end.line === currentLine) {
               lines[currentLine] =
                 line.slice(0, start.column) + line.slice(end.column);
@@ -219,6 +261,13 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             cursorPosition,
             lines
           );
+
+          updateCursorSelection(
+            { column: cursorPosition.column, line: cursorPosition.line - 1 },
+            cursorPosition,
+            isHoldingShift
+          );
+
           break;
 
         case "ArrowDown":
@@ -227,6 +276,13 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             cursorPosition,
             lines
           );
+
+          updateCursorSelection(
+            { column: cursorPosition.column, line: cursorPosition.line + 1 },
+            cursorPosition,
+            isHoldingShift
+          );
+
           break;
 
         case "ArrowRight":
@@ -236,45 +292,11 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             lines
           );
 
-          setCursorSelection((prevCursorSelection) => {
-            let cursorSelection = { ...prevCursorSelection };
-
-            if (isShifting) {
-              if (cursorSelection.start) {
-                const { start, end } = ((): {
-                  start: CursorPosition;
-                  end: CursorPosition;
-                } => {
-                  if (cursorSelection.start.line === cursorPosition.line) {
-                    return cursorSelection.start.column <= cursorPosition.column
-                      ? { start: cursorSelection.start, end: cursorPosition }
-                      : { start: cursorPosition, end: cursorSelection.start };
-                  } else {
-                    return cursorSelection.start.line <= cursorPosition.line
-                      ? { start: cursorSelection.start, end: cursorPosition }
-                      : { start: cursorPosition, end: cursorSelection.start };
-                  }
-                })();
-
-                cursorSelection = { start, end };
-              } else {
-                cursorSelection = {
-                  start: {
-                    column: cursorPosition.column - 1,
-                    line: cursorPosition.line,
-                  },
-                  end: {
-                    column: cursorPosition.column,
-                    line: cursorPosition.line,
-                  },
-                };
-              }
-            } else {
-              cursorSelection = { start: undefined, end: undefined };
-            }
-
-            return cursorSelection;
-          });
+          updateCursorSelection(
+            { column: cursorPosition.column - 1, line: cursorPosition.line },
+            cursorPosition,
+            isHoldingShift
+          );
 
           break;
 
@@ -285,45 +307,12 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             lines
           );
 
-          setCursorSelection((prevCursorSelection) => {
-            let cursorSelection = { ...prevCursorSelection };
+          updateCursorSelection(
+            { column: cursorPosition.column + 1, line: cursorPosition.line },
+            cursorPosition,
+            isHoldingShift
+          );
 
-            if (isShifting) {
-              if (cursorSelection.start) {
-                const { start, end } = ((): {
-                  start: CursorPosition;
-                  end: CursorPosition;
-                } => {
-                  if (cursorSelection.start.line === cursorPosition.line) {
-                    return cursorSelection.start.column <= cursorPosition.column
-                      ? { start: cursorSelection.start, end: cursorPosition }
-                      : { start: cursorPosition, end: cursorSelection.start };
-                  } else {
-                    return cursorSelection.start.line <= cursorPosition.line
-                      ? { start: cursorSelection.start, end: cursorPosition }
-                      : { start: cursorPosition, end: cursorSelection.start };
-                  }
-                })();
-
-                cursorSelection = { start, end };
-              } else {
-                cursorSelection = {
-                  start: {
-                    column: cursorPosition.column + 1,
-                    line: cursorPosition.line,
-                  },
-                  end: {
-                    column: cursorPosition.column,
-                    line: cursorPosition.line,
-                  },
-                };
-              }
-            } else {
-              cursorSelection = { start: undefined, end: undefined };
-            }
-
-            return cursorSelection;
-          });
           break;
 
         case "Home":
@@ -468,8 +457,6 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
             if (start && end) {
               if (start.line === currentLine && end.line === currentLine) {
-                console.log(start.column, end.column);
-
                 return (
                   <>
                     {code.slice(0, start.column)}
@@ -497,7 +484,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
                     {code.slice(end.column)}
                   </>
                 );
-              } else {
+              } else if (start.line < currentLine && currentLine < end.line) {
                 return <span className="selection">{code}</span>;
               }
             }
