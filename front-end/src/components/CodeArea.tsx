@@ -42,6 +42,11 @@ let myMouseClicksBuffer: MouseClick[] = [];
 let myKeysPressedBuffer: { key: string; isShifting: boolean }[] = [];
 let intitializationFlag: boolean = false;
 
+type CursorSelection = {
+  start?: CursorPosition;
+  end?: CursorPosition;
+};
+
 export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   const [room, setRoom, socket] = useContext(RoomContext);
 
@@ -56,10 +61,10 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     { x: 0, y: 0 }
   );
 
-  const [cursorSelection, setCursorSelection] = useState<{
-    start?: CursorPosition;
-    end?: CursorPosition;
-  }>({ start: undefined, end: undefined });
+  const [cursorSelection, setCursorSelection] = useState<CursorSelection>({
+    start: undefined,
+    end: undefined,
+  });
 
   useEffect(() => {
     initializeSocketEventHandlers();
@@ -145,26 +150,13 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }
 
   function deleteSingleCharacter(line: string, cursorPosition: CursorPosition) {
-    if (cursorSelection.start && cursorSelection.end) {
-      const start = Math.min(
-        cursorSelection.start.column || 0,
-        cursorSelection.end.column || 0
-      );
-      const end = Math.max(
-        cursorSelection.start.column || 0,
-        cursorSelection.end.column || 0
-      );
+    let charachterIndex = cursorPosition.column;
+    if (charachterIndex <= 0) return line;
 
-      return line.slice(0, start) + line.slice(end);
-    } else {
-      let charachterIndex = cursorPosition.column;
-      if (charachterIndex <= 0) return line;
+    charachterIndex = Math.min(charachterIndex, line.length);
+    cursorPosition.column = charachterIndex - 1;
 
-      charachterIndex = Math.min(charachterIndex, line.length);
-      cursorPosition.column = charachterIndex - 1;
-
-      return line.slice(0, charachterIndex - 1) + line.slice(charachterIndex);
-    }
+    return line.slice(0, charachterIndex - 1) + line.slice(charachterIndex);
   }
 
   function addLine(
@@ -172,36 +164,49 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     cursorPosition: CursorPosition
   ): CursorPosition {
     lines.splice(cursorPosition.line + 1, 0, "");
-    return moveCursor(
-      { line: cursorPosition.line + 1, column: cursorPosition.column },
-      cursorPosition,
-      lines
-    );
+    return moveCursor({ line: cursorPosition.line + 1 }, cursorPosition, lines);
   }
 
   function handleKeyDown(key: string, isShifting: boolean) {
     if (keysToIgnore.includes(key)) return;
 
-    if (!isShifting) setCursorSelection({ start: undefined, end: undefined });
-
     setEditorData((prevEditorData: EditorData) => {
       let { lines, cursorPosition } = { ...prevEditorData };
-      const selectedLine = cursorPosition.line;
-      let line: string = lines[selectedLine] || "";
+      const currentLine = cursorPosition.line;
+      let line: string = lines[currentLine] || "";
 
       switch (key) {
         case "Backspace":
-          if (line.length)
-            lines[selectedLine] = deleteSingleCharacter(line, cursorPosition);
-          else {
-            if (selectedLine && lines.length > 1) {
-              lines.splice(selectedLine, 1);
-              cursorPosition = {
-                line: selectedLine - 1,
-                column: lines[selectedLine - 1].length,
-              };
+          const { start, end } = cursorSelection;
+          if (start && end) {
+            console.log(start.line === currentLine, end.line === currentLine);
+
+            if (start.line === currentLine && end.line === currentLine) {
+              lines[currentLine] =
+                line.slice(0, start.column) + line.slice(end.column);
+            } else if (start.line === currentLine) {
+              lines[currentLine] = line.slice(0, start.column);
+            } else if (end.line === currentLine) {
+              lines[currentLine] = line.slice(end.column);
+            } else {
+              lines.splice(currentLine, 1);
+            }
+
+            setCursorSelection({ start: undefined, end: undefined });
+          } else {
+            if (line.length) {
+              lines[currentLine] = deleteSingleCharacter(line, cursorPosition);
+            } else {
+              if (lines.length > 1) {
+                lines.splice(currentLine, 1);
+                cursorPosition = {
+                  line: currentLine - 1,
+                  column: lines[currentLine - 1].length,
+                };
+              }
             }
           }
+
           break;
 
         case "Enter":
@@ -210,70 +215,23 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
         case "ArrowUp":
           cursorPosition = moveCursor(
-            { line: selectedLine - 1, column: cursorPosition.column },
+            { line: currentLine - 1, column: cursorPosition.column },
             cursorPosition,
             lines
           );
-
-          setCursorSelection((prevCursorSelection) => {
-            let cursorSelection = { ...prevCursorSelection };
-
-            if (isShifting) {
-              if (cursorSelection.start) {
-                cursorSelection.end = cursorPosition;
-              } else {
-                cursorSelection = {
-                  start: {
-                    column: cursorPosition.column - 1,
-                    line: cursorPosition.line,
-                  },
-                  end: {
-                    column: cursorPosition.column,
-                    line: cursorPosition.line,
-                  },
-                };
-              }
-            }
-
-            return cursorSelection;
-          });
           break;
 
         case "ArrowDown":
           cursorPosition = moveCursor(
-            { line: selectedLine + 1, column: cursorPosition.column },
+            { line: currentLine + 1, column: cursorPosition.column },
             cursorPosition,
             lines
           );
-
-          setCursorSelection((prevCursorSelection) => {
-            let cursorSelection = { ...prevCursorSelection };
-
-            if (isShifting) {
-              if (cursorSelection.start) {
-                cursorSelection.end = cursorPosition;
-              } else {
-                cursorSelection = {
-                  start: {
-                    column: cursorPosition.column - 1,
-                    line: cursorPosition.line,
-                  },
-                  end: {
-                    column: cursorPosition.column,
-                    line: cursorPosition.line,
-                  },
-                };
-              }
-            }
-
-            return cursorSelection;
-          });
-
           break;
 
         case "ArrowRight":
           cursorPosition = moveCursor(
-            { line: selectedLine, column: cursorPosition.column + 1 },
+            { line: currentLine, column: cursorPosition.column + 1 },
             cursorPosition,
             lines
           );
@@ -283,7 +241,22 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
             if (isShifting) {
               if (cursorSelection.start) {
-                cursorSelection.end = cursorPosition;
+                const { start, end } = ((): {
+                  start: CursorPosition;
+                  end: CursorPosition;
+                } => {
+                  if (cursorSelection.start.line === cursorPosition.line) {
+                    return cursorSelection.start.column <= cursorPosition.column
+                      ? { start: cursorSelection.start, end: cursorPosition }
+                      : { start: cursorPosition, end: cursorSelection.start };
+                  } else {
+                    return cursorSelection.start.line <= cursorPosition.line
+                      ? { start: cursorSelection.start, end: cursorPosition }
+                      : { start: cursorPosition, end: cursorSelection.start };
+                  }
+                })();
+
+                cursorSelection = { start, end };
               } else {
                 cursorSelection = {
                   start: {
@@ -296,6 +269,8 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
                   },
                 };
               }
+            } else {
+              cursorSelection = { start: undefined, end: undefined };
             }
 
             return cursorSelection;
@@ -305,7 +280,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
         case "ArrowLeft":
           cursorPosition = moveCursor(
-            { line: selectedLine, column: cursorPosition.column - 1 },
+            { line: currentLine, column: cursorPosition.column - 1 },
             cursorPosition,
             lines
           );
@@ -315,7 +290,22 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
             if (isShifting) {
               if (cursorSelection.start) {
-                cursorSelection.end = cursorPosition;
+                const { start, end } = ((): {
+                  start: CursorPosition;
+                  end: CursorPosition;
+                } => {
+                  if (cursorSelection.start.line === cursorPosition.line) {
+                    return cursorSelection.start.column <= cursorPosition.column
+                      ? { start: cursorSelection.start, end: cursorPosition }
+                      : { start: cursorPosition, end: cursorSelection.start };
+                  } else {
+                    return cursorSelection.start.line <= cursorPosition.line
+                      ? { start: cursorSelection.start, end: cursorPosition }
+                      : { start: cursorPosition, end: cursorSelection.start };
+                  }
+                })();
+
+                cursorSelection = { start, end };
               } else {
                 cursorSelection = {
                   start: {
@@ -328,6 +318,8 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
                   },
                 };
               }
+            } else {
+              cursorSelection = { start: undefined, end: undefined };
             }
 
             return cursorSelection;
@@ -335,70 +327,27 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           break;
 
         case "Home":
-          if (isShifting) {
-            let intialCursorColumn = cursorPosition.column;
-
-            setCursorSelection((prevCursorSelection) => {
-              let cursorSelection = { ...prevCursorSelection };
-
-              cursorSelection = {
-                start: {
-                  column: intialCursorColumn,
-                  line: cursorPosition.line,
-                },
-                end: {
-                  column: 0,
-                  line: cursorPosition.line,
-                },
-              };
-
-              return cursorSelection;
-            });
-          }
-
           cursorPosition = moveCursor(
-            { line: selectedLine, column: 0 },
+            { line: currentLine, column: 0 },
             cursorPosition,
             lines
           );
           break;
 
         case "End":
-          if (isShifting) {
-            let intialCursorColumn = cursorPosition.column;
-
-            setCursorSelection((prevCursorSelection) => {
-              let cursorSelection = { ...prevCursorSelection };
-
-              cursorSelection = {
-                start: {
-                  column: intialCursorColumn,
-                  line: cursorPosition.line,
-                },
-                end: {
-                  column: line.length,
-                  line: cursorPosition.line,
-                },
-              };
-
-              return cursorSelection;
-            });
-          }
-
           cursorPosition = moveCursor(
-            { line: selectedLine, column: line.length },
+            { line: currentLine, column: line.length },
             cursorPosition,
             lines
           );
-
           break;
 
         case "Tab":
-          lines[selectedLine] = appendCodeToLine(line, "  ", cursorPosition);
+          lines[currentLine] = appendCodeToLine(line, "  ", cursorPosition);
           break;
 
         default:
-          lines[selectedLine] = appendCodeToLine(line, key, cursorPosition);
+          lines[currentLine] = appendCodeToLine(line, key, cursorPosition);
           break;
       }
 
@@ -419,21 +368,25 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }
 
   function moveCursor(
-    desiredPosition: CursorPosition,
+    desiredPosition: { line?: number; column?: number },
     cursorPosition: CursorPosition,
     lines: string[]
   ): CursorPosition {
+    if (desiredPosition.line === undefined)
+      desiredPosition.line = cursorPosition.line;
+    if (desiredPosition.column === undefined)
+      desiredPosition.column = cursorPosition.column;
+
     if (desiredPosition.column < 0 || desiredPosition.line < 0)
       return cursorPosition;
 
     desiredPosition.line = Math.min(desiredPosition.line, lines.length - 1);
-
     desiredPosition.column = Math.min(
       desiredPosition.column,
       lines[desiredPosition.line].length
     );
 
-    return desiredPosition;
+    return desiredPosition as CursorPosition;
   }
 
   function getNodeAndOffset() {
@@ -446,17 +399,26 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
     const editor = editorRef.current;
     if (!editor) return { node: null, offset: 0 };
+    // The line might have several children because of the selection
     const children = editor.childNodes[currentCursorLine].childNodes;
+    // We want to make it such that if the element doesn't have any children
+    // we set both the targetNode and the offest to their corresponding places
+    // If a Line existed but it didn't have any text as its children
 
-    for (const child of children) {
-      if (!child.textContent) continue;
-      const textLength = child.textContent.length;
-      if (charCount + textLength >= currentCursorColumn) {
+    if (editor.childNodes[currentCursorLine].childNodes.length) {
+      for (const child of children) {
         targetNode = child;
-        offset = currentCursorColumn - charCount;
-        break;
+        if (child.textContent) {
+          const textLength = child.textContent.length;
+          if (charCount + textLength >= currentCursorColumn) {
+            offset = currentCursorColumn - charCount;
+            break;
+          }
+          charCount += textLength;
+        }
       }
-      charCount += textLength;
+    } else {
+      targetNode = editor.childNodes[currentCursorLine];
     }
 
     return { node: targetNode, offset };
@@ -464,25 +426,29 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
 
   function updateAbsoluteCursorPosition() {
     if (!editorRef.current) return;
-
-    const range = document.createRange();
-    const selection = window.getSelection();
+    let rect: DOMRect = {} as DOMRect;
 
     const { node, offset } = getNodeAndOffset();
+
     if (!node) return;
 
-    if (node.nodeType === Node.TEXT_NODE) {
-      range.setStart(node, offset);
-    } else if (node.nodeType === Node.ELEMENT_NODE && node.firstChild) {
-      range.setStart(node.firstChild, offset);
+    if (
+      node.nodeType === Node.TEXT_NODE ||
+      (node.nodeType === Node.ELEMENT_NODE && node.firstChild)
+    ) {
+      const range = document.createRange();
+      const selection = window.getSelection();
+
+      range.setStart(node.firstChild || node, offset);
+      range.collapse(true);
+
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      rect = range.getBoundingClientRect();
+    } else {
+      rect = (node as HTMLElement).getBoundingClientRect();
     }
-
-    range.collapse(true);
-
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    const rect = range.getBoundingClientRect();
 
     setAbsoluteCursorPosition({
       x: rect.left,
@@ -494,54 +460,50 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     const getLineClasses = (index: number) =>
       `line ${index === editorData.cursorPosition.line && " line-highlited"}`;
 
-    const startColumn = Math.min(
-      cursorSelection.start?.column || 0,
-      cursorSelection.end?.column || 0
-    );
-    const endColumn = Math.max(
-      cursorSelection.start?.column || 0,
-      cursorSelection.end?.column || 0
-    );
-
-    return editorData.lines.map((code: string, lineNumber: number) => {
-      const sameStartLine = cursorSelection.start?.line === lineNumber;
-      const sameEndLine = cursorSelection.end?.line === lineNumber;
-
-      if (sameStartLine && sameEndLine) {
-        return (
-          <pre key={lineNumber} className={getLineClasses(lineNumber)}>
-            <>
-              {code.slice(0, startColumn)}
-              <span className="selection">
-                {code.slice(startColumn, endColumn)}
-              </span>
-              {code.slice(endColumn)}
-            </>
-          </pre>
-        );
-      } else if (sameStartLine && !sameEndLine) {
-        return (
-          <pre key={lineNumber} className={getLineClasses(lineNumber)}>
-            <>
-              {code.slice(0, startColumn)}
-              <span className="selection">{code.slice(startColumn)}</span>
-            </>
-          </pre>
-        );
-      } else if (!sameStartLine && sameEndLine) {
-        return (
-          <pre key={lineNumber} className={getLineClasses(lineNumber)}>
-            <>
-              <span className="selection">{code.slice(0, endColumn)}</span>
-              {code.slice(endColumn)}
-            </>
-          </pre>
-        );
-      }
-
+    return editorData.lines.map((code: string, currentLine: number) => {
       return (
-        <pre key={lineNumber} className={getLineClasses(lineNumber)}>
-          {code}
+        <pre key={currentLine} className={getLineClasses(currentLine)}>
+          {(() => {
+            const { start, end } = cursorSelection;
+
+            if (start && end) {
+              if (start.line === currentLine && end.line === currentLine) {
+                console.log(start.column, end.column);
+
+                return (
+                  <>
+                    {code.slice(0, start.column)}
+                    <span className="selection">
+                      {code.slice(start.column, end.column)}
+                    </span>
+                    {code.slice(end.column)}
+                  </>
+                );
+              } else if (start.line === currentLine) {
+                return (
+                  <>
+                    {code.slice(0, start.column)}
+                    <span className="selection">
+                      {code.slice(start.column)}
+                    </span>
+                  </>
+                );
+              } else if (end.line === currentLine) {
+                return (
+                  <>
+                    <span className="selection">
+                      {code.slice(0, end.column)}
+                    </span>
+                    {code.slice(end.column)}
+                  </>
+                );
+              } else {
+                return <span className="selection">{code}</span>;
+              }
+            }
+
+            return code;
+          })()}
         </pre>
       );
     });
