@@ -3,6 +3,8 @@ import { Member, RoomContext } from "../App";
 import CodeArea, { CursorPosition } from "./CodeArea";
 import MouseCursor from "./MouseCursor";
 import Interpolater from "../common/Interpolater";
+import ContextMenuWrapper from "./ContextMenuWrapper";
+import DirectoriesTab from "./FileBrowser/DirectoriesTab";
 
 export const CodeEditorContext = createContext<any>(undefined);
 
@@ -20,6 +22,10 @@ function CodeEditor({ onCompile }: any) {
 
   return (
     <>
+      <ContextMenuWrapper>
+        <DirectoriesTab />
+      </ContextMenuWrapper>
+
       <CodeEditorContext.Provider
         value={{
           editorData,

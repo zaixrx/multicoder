@@ -172,8 +172,6 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
     cursorPosition: CursorPosition,
     isHoldingShift: boolean
   ) {
-    console.log("seleciton");
-
     setCursorSelection((prevCursorSelection) => {
       let cursorSelection = { ...prevCursorSelection };
 
@@ -183,7 +181,7 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
             start: CursorPosition;
             end: CursorPosition;
           } => {
-            if (cursorSelection.start.line === cursorPosition.line) {
+            if (selectionStart.line === cursorPosition.line) {
               return cursorSelection.start.column <= cursorPosition.column
                 ? { start: cursorSelection.start, end: cursorPosition }
                 : { start: cursorPosition, end: cursorSelection.end };
@@ -197,16 +195,15 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           cursorSelection = { start, end };
         } else {
           const { start, end } =
-            selectionStart.line <= cursorPosition.line
-              ? { start: cursorSelection.start, end: cursorPosition }
-              : { start: cursorPosition, end: cursorSelection.start };
+            selectionStart.column <= cursorPosition.column
+              ? { start: selectionStart, end: cursorPosition }
+              : { start: cursorPosition, end: selectionStart };
 
           cursorSelection = { start, end };
         }
       } else {
         cursorSelection = { start: undefined, end: undefined };
       }
-
       return cursorSelection;
     });
   }
@@ -223,16 +220,39 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
         case "Backspace":
           const { start, end } = cursorSelection;
           if (start && end) {
-            if (start.line === currentLine && end.line === currentLine) {
-              lines[currentLine] =
-                line.slice(0, start.column) + line.slice(end.column);
-            } else if (start.line === currentLine) {
-              lines[currentLine] = line.slice(0, start.column);
-            } else if (end.line === currentLine) {
-              lines[currentLine] = line.slice(end.column);
-            } else {
-              lines.splice(currentLine, 1);
+            // used to track the number of deleted lines
+            // because the loop starts from the first up to the last element
+            // we need to delete the lines in between the start and the end of the selection
+            // and in order for us to map the currentLine to its corresponding line
+            // we need to substract the currentLine by the number of deletedLines also called the offset
+            let deletedLines = 0;
+
+            for (let currentLine = 0; currentLine <= end.line; currentLine++) {
+              if (start.line === currentLine && end.line === currentLine) {
+                lines[currentLine] =
+                  line.slice(0, start.column) + line.slice(end.column);
+              } else if (start.line === currentLine) {
+                lines[currentLine] = lines[currentLine].slice(0, start.column);
+              } else if (end.line === currentLine) {
+                lines[start.line] += lines[
+                  Math.min(currentLine - deletedLines, lines.length - 1)
+                ].slice(end.column);
+                lines.splice(currentLine - deletedLines, 1);
+                deletedLines++;
+              } else if (
+                start.line < currentLine &&
+                currentLine < end.line - deletedLines
+              ) {
+                lines.splice(currentLine, 1);
+                // done to sync deleting data
+                deletedLines++;
+              }
             }
+
+            cursorPosition = {
+              line: start.line,
+              column: start.column,
+            };
 
             setCursorSelection({ start: undefined, end: undefined });
           } else {
@@ -263,7 +283,10 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           );
 
           updateCursorSelection(
-            { column: cursorPosition.column, line: cursorPosition.line - 1 },
+            {
+              column: cursorSelection.end?.column || cursorPosition.column,
+              line: cursorPosition.line - 1,
+            },
             cursorPosition,
             isHoldingShift
           );
@@ -278,7 +301,10 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
           );
 
           updateCursorSelection(
-            { column: cursorPosition.column, line: cursorPosition.line + 1 },
+            {
+              column: cursorSelection.end?.column || cursorPosition.column,
+              line: cursorPosition.line + 1,
+            },
             cursorPosition,
             isHoldingShift
           );
