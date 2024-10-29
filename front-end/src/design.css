@@ -71,3 +71,8 @@ main {
 .context-menu li:hover {
   background-color: #444;
 }
+
+.dir-tab {
+  width: 100px;
+  padding-left: 1rem;
+}

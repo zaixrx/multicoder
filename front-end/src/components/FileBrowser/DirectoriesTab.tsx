@@ -2,7 +2,7 @@ import { useContext, useEffect, useRef, useState } from "react";
 import DirectoryTree, { DirectoryTreeNodes, FolderNode } from "./DirectoryTree";
 import { ContextMenuContext } from "../ContextMenuWrapper";
 
-function DirectoriesTab() {
+function DirectoriesTab({ className, ...rest }: { className: string }) {
   const [showMenu, hideMenu] = useContext(ContextMenuContext);
 
   const initializedDirectories = useRef<boolean>(false);
@@ -78,7 +78,11 @@ function DirectoriesTab() {
   }
 
   return (
-    <div className="fill-vertically" onContextMenu={handleContextMenuTrigger}>
+    <div
+      className={`fill-vertically ${className}`}
+      onContextMenu={handleContextMenuTrigger}
+      {...rest}
+    >
       {currentDirectory ? (
         <>
           <div onClick={() => setCurrentDirectory(currentDirectory.parent)}>

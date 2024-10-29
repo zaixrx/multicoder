@@ -60,7 +60,7 @@ export default function App() {
 
   return (
     socket && (
-      <main className="d-flex fill-screen-vertically">
+      <main className="fill-screen-vertically">
         <span>Socket Id: {socket.id}</span>
         <RoomContext.Provider value={[room, setRoom, socket]}>
           {room.id ? (

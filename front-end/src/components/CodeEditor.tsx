@@ -21,11 +21,10 @@ function CodeEditor({ onCompile }: any) {
   });
 
   return (
-    <>
+    <div className="d-flex">
       <ContextMenuWrapper>
-        <DirectoriesTab />
+        <DirectoriesTab className="dir-tab" />
       </ContextMenuWrapper>
-
       <CodeEditorContext.Provider
         value={{
           editorData,
@@ -58,7 +57,7 @@ function CodeEditor({ onCompile }: any) {
             </Interpolater>
           )
       )}
-    </>
+    </div>
   );
 }
 
