@@ -9,6 +9,9 @@ import {
 import { Socket } from "socket.io-client";
 import Queue from "./utils/queue";
 import { Vector2 } from "./common/Interpolater";
+import DirectoryTree, {
+  FileNode,
+} from "./components/FileBrowser/DirectoryTree";
 
 export const RoomContext = createContext<any>(undefined);
 export type RoomContextType = [
@@ -19,7 +22,12 @@ export type RoomContextType = [
 
 export default function App() {
   const [socket, setSocket] = useState<Socket | undefined>();
-  const [room, setRoom] = useState<Room>({ id: "", members: [] });
+  const [room, setRoom] = useState<Room>({
+    id: "",
+    members: [],
+    directoryTree: new DirectoryTree(),
+    selectedFile: undefined,
+  });
 
   //const consoleOutput = useRef<HTMLDivElement>(null);
   const outputFrameRef = useRef<HTMLIFrameElement>(null);
@@ -35,6 +43,7 @@ export default function App() {
         _room.members.forEach((member) => {
           member.mousePositionBuffer = new Queue<Vector2>();
         });
+        _room.directoryTree = new DirectoryTree();
         setRoom(_room);
       });
       setSocket(socket);
@@ -85,5 +94,7 @@ export type Member = {
 
 export type Room = {
   id: string;
+  directoryTree: DirectoryTree;
+  selectedFile: FileNode | undefined;
   members: Member[];
 };

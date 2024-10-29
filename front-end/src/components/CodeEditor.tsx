@@ -23,7 +23,7 @@ function CodeEditor({ onCompile }: any) {
   return (
     <div className="d-flex">
       <ContextMenuWrapper>
-        <DirectoriesTab className="dir-tab" />
+        <DirectoriesTab className="fill-screen-vertically dir-tab" />
       </ContextMenuWrapper>
       <CodeEditorContext.Provider
         value={{

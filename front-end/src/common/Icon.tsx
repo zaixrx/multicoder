@@ -1,9 +1,15 @@
-enum IconMode {
+export enum IconMode {
   Dark,
   Light,
 }
 
-function Icon({ mode, name }: { mode: IconMode; name: string }) {
+function Icon({
+  mode = IconMode.Dark,
+  name,
+}: {
+  mode: IconMode;
+  name: string;
+}) {
   function getIconPath() {
     let path = "";
 

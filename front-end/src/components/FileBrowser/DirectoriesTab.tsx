@@ -1,67 +1,41 @@
-import { useContext, useEffect, useRef, useState } from "react";
-import DirectoryTree, { DirectoryTreeNodes, FolderNode } from "./DirectoryTree";
+import { useContext } from "react";
+import { DirectoryNode, FileNode, FolderNode } from "./DirectoryTree";
 import { ContextMenuContext } from "../ContextMenuWrapper";
+import Icon, { IconMode } from "../../common/Icon";
+import { RoomContext, RoomContextType } from "../../App";
 
 function DirectoriesTab({ className, ...rest }: { className: string }) {
+  const [room, setRoom] = useContext<RoomContextType>(RoomContext);
   const [showMenu, hideMenu] = useContext(ContextMenuContext);
 
-  const initializedDirectories = useRef<boolean>(false);
-  const [directoryTree, setDirectoryTree] = useState<DirectoryTree>(
-    new DirectoryTree()
-  );
-
-  const [currentDirectory, setCurrentDirectory] = useState<
-    FolderNode | undefined
-  >();
-
-  useEffect(() => {
-    if (initializedDirectories.current) return;
-
-    const _directoryTree: DirectoryTree = {
-      ...directoryTree,
-    };
-    const rootDirectory: FolderNode = _directoryTree.rootNodes[0] as FolderNode;
-    const foldersData = ["node_modules", "public", "src"];
-    foldersData.forEach((folderName) => rootDirectory.appendFolder(folderName));
-    setDirectoryTree(_directoryTree);
-
-    initializedDirectories.current = true;
-  }, []);
-
-  function handleNodeClick(node: DirectoryTreeNodes) {
-    if (node instanceof FolderNode) setCurrentDirectory(node);
+  function handleNodeClick(node: DirectoryNode) {
+    const newRoom = { ...room };
+    if (node instanceof FolderNode)
+      newRoom.directoryTree.currentDirectory = node;
+    else if (node instanceof FileNode) newRoom.selectedFile = node;
+    setRoom(newRoom);
   }
 
-  function createFile(name = "untitled-file") {
-    const _directoryTree = { ...directoryTree };
-    let parentNodeRefrence = undefined;
-    if (currentDirectory) {
-      parentNodeRefrence = _directoryTree.findNode(
-        currentDirectory.indexes
-      ) as FolderNode;
-    } else {
-      parentNodeRefrence = _directoryTree;
-    }
-    parentNodeRefrence?.appendFile(name);
+  function setCurrentDirectory(directory: FolderNode) {
+    const newRoom = { ...room };
+    newRoom.directoryTree.currentDirectory = directory || newRoom.directoryTree;
+    setRoom(newRoom);
+  }
+
+  function createFile(name = "") {
+    const newRoom = { ...room };
+    newRoom.directoryTree.currentDirectory.appendFile(name);
 
     hideMenu();
-    setDirectoryTree(_directoryTree);
+    setRoom(newRoom);
   }
 
   function createFolder(name = "untitled-folder") {
-    const _directoryTree = { ...directoryTree };
-    let parentNodeRefrence = undefined;
-    if (currentDirectory) {
-      parentNodeRefrence = _directoryTree.findNode(
-        currentDirectory.indexes
-      ) as FolderNode;
-    } else {
-      parentNodeRefrence = _directoryTree;
-    }
-    parentNodeRefrence?.appendFolder(name);
+    const newRoom = { ...room };
+    newRoom.directoryTree.currentDirectory.appendFolder(name);
 
     hideMenu();
-    setDirectoryTree(_directoryTree);
+    setRoom(newRoom);
   }
 
   function handleContextMenuTrigger(
@@ -83,38 +57,65 @@ function DirectoriesTab({ className, ...rest }: { className: string }) {
       onContextMenu={handleContextMenuTrigger}
       {...rest}
     >
-      {currentDirectory ? (
-        <>
-          <div onClick={() => setCurrentDirectory(currentDirectory.parent)}>
-            Back
-          </div>
-          {currentDirectory.children.map((child, index) => (
-            <DirectoryNode
-              key={index}
-              name={child.name}
-              onClick={() => {
-                handleNodeClick(child);
-              }}
-            />
-          ))}
-        </>
-      ) : (
-        directoryTree.rootNodes.map((node, index) => (
-          <DirectoryNode
-            key={index}
-            name={node.name}
-            onClick={() => {
-              handleNodeClick(node);
-            }}
-          />
-        ))
+      {room.directoryTree.currentDirectory instanceof FolderNode && (
+        <div
+          onClick={() => {
+            // nothing much, its just typescript being typtypescript
+            setCurrentDirectory(
+              (room.directoryTree.currentDirectory as FolderNode)
+                .parent as FolderNode
+            );
+          }}
+        >
+          Back
+        </div>
       )}
+
+      {room.directoryTree.currentDirectory.children.map((child, index) => {
+        return (
+          <DirectoryNodeWrapper
+            selected={room.selectedFile === child}
+            key={index}
+            name={child.name}
+            type={typeOfDirectoryNode(child)}
+            onClick={() => handleNodeClick(child)}
+          />
+        );
+      })}
     </div>
   );
 }
 
-function DirectoryNode({ name, onClick }: any) {
-  return <div onClick={onClick}>{name}</div>;
+function typeOfDirectoryNode(node: DirectoryNode) {
+  if (node && typeof node === "object") {
+    if (node instanceof FolderNode) return FolderNode;
+    else if (node instanceof FileNode) return FileNode;
+  }
+}
+
+function DirectoryNodeWrapper({ selected, type, name, onClick }: any) {
+  function getIconName() {
+    switch (type) {
+      case FolderNode:
+        return "/folder.svg";
+      case FileNode:
+        return "/file.svg";
+      default:
+        return "/";
+    }
+  }
+
+  return (
+    <div
+      className={`d-flex border-2 border-bottom px-2 gap-2 clickable${
+        selected ? " selected" : ""
+      }`}
+      onClick={onClick}
+    >
+      <Icon name={getIconName()} mode={IconMode.Dark} />
+      <span>{name}</span>
+    </div>
+  );
 }
 
 export default DirectoriesTab;

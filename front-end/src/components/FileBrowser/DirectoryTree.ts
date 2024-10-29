@@ -1,4 +1,4 @@
-export type DirectoryTreeNodes = FolderNode | FileNode;
+export type DirectoryNode = FolderNode | FileNode;
 
 class DirectoryTreeNode {
   public parent: FolderNode | undefined;
@@ -23,7 +23,7 @@ export class FileNode extends DirectoryTreeNode {
 
 export class FolderNode extends DirectoryTreeNode {
   public name: string;
-  public children: DirectoryTreeNodes[];
+  public children: DirectoryNode[];
 
   constructor(parent: FolderNode | undefined, name: string, index: number) {
     super(parent, [...(parent?.indexes || []), index]);
@@ -45,29 +45,30 @@ export class FolderNode extends DirectoryTreeNode {
 }
 
 class DirectoryTree {
-  public rootNodes: DirectoryTreeNodes[];
+  public children: DirectoryNode[];
+  public currentDirectory: FolderNode | DirectoryTree;
 
-  constructor(rootFolderName = "main") {
-    let intialRootNode = new FolderNode(undefined, rootFolderName, 0);
-    this.rootNodes = [intialRootNode];
+  constructor() {
+    this.children = [];
+    this.currentDirectory = this;
   }
 
   appendFile = (name: string): FileNode => {
-    const fileNode = new FileNode(undefined, name, this.rootNodes.length);
-    this.rootNodes.push(fileNode);
+    const fileNode = new FileNode(undefined, name, this.children.length);
+    this.children.push(fileNode);
     return fileNode;
   };
 
   appendFolder = (name: string): FolderNode => {
-    const folderNode = new FolderNode(undefined, name, this.rootNodes.length);
-    this.rootNodes.push(folderNode);
+    const folderNode = new FolderNode(undefined, name, this.children.length);
+    this.children.push(folderNode);
     return folderNode;
   };
 
-  findNode = (indexes: number[]): DirectoryTreeNodes | undefined => {
-    if (indexes.length === 1) return this.rootNodes[indexes[0]];
+  findNode = (indexes: number[]): DirectoryNode | undefined => {
+    if (indexes.length === 1) return this.children[indexes[0]];
 
-    let currentDirectory: FolderNode = this.rootNodes[indexes[0]] as FolderNode;
+    let currentDirectory: FolderNode = this.children[indexes[0]] as FolderNode;
     for (let i = 1; i < indexes.length; i++) {
       if (i + 1 === indexes.length)
         return currentDirectory.children[indexes[i]];

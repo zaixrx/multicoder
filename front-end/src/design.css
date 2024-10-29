@@ -73,6 +73,13 @@ main {
 }
 
 .dir-tab {
-  width: 100px;
-  padding-left: 1rem;
+  width: 200px;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.selected {
+  background-color: red;
 }
