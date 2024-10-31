@@ -1,3 +1,5 @@
+import { CursorPosition } from "../CodeArea";
+
 export type DirectoryNode = FolderNode | FileNode;
 
 class DirectoryTreeNode {
@@ -13,11 +15,15 @@ class DirectoryTreeNode {
 export class FileNode extends DirectoryTreeNode {
   public parent: FolderNode | undefined;
   public name: string;
+  public content: string[];
+  public cursorPosition: CursorPosition;
 
   constructor(parent: FolderNode | undefined, name: string, index: number) {
     super(parent, [...(parent?.indexes || []), index]);
     this.parent = parent;
     this.name = name;
+    this.content = ["// write you code here"];
+    this.cursorPosition = { line: 0, column: 0 };
   }
 }
 

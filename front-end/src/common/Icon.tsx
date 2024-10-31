@@ -3,13 +3,7 @@ export enum IconMode {
   Light,
 }
 
-function Icon({
-  mode = IconMode.Dark,
-  name,
-}: {
-  mode: IconMode;
-  name: string;
-}) {
+function Icon({ mode = IconMode.Dark, name, ...rest }: any) {
   function getIconPath() {
     let path = "";
 
@@ -18,14 +12,14 @@ function Icon({
         path = "/icons/dark/" + name;
         break;
       case IconMode.Light:
-        path = "/icons/dark/" + name;
+        path = "/icons/light/" + name;
         break;
     }
 
     return path;
   }
 
-  return <img src={getIconPath()} />;
+  return <img src={getIconPath()} {...rest} />;
 }
 
 export default Icon;

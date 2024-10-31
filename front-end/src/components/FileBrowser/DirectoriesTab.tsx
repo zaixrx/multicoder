@@ -24,7 +24,7 @@ function DirectoriesTab({ className, ...rest }: { className: string }) {
 
   function createFile(name = "") {
     const newRoom = { ...room };
-    newRoom.directoryTree.currentDirectory.appendFile(name);
+    newRoom.directoryTree.currentDirectory.appendFile(name || "untitled.js");
 
     hideMenu();
     setRoom(newRoom);
@@ -57,8 +57,19 @@ function DirectoriesTab({ className, ...rest }: { className: string }) {
       onContextMenu={handleContextMenuTrigger}
       {...rest}
     >
+      <section className="d-flex gap-1 px-1 align-items-center justify-content-end">
+        <button onClick={() => createFile()}>
+          <Icon mode={IconMode.Light} name="new-file.svg" width={20} />
+        </button>
+
+        <button onClick={() => createFolder()}>
+          <Icon mode={IconMode.Light} name="new-folder.svg" width={20} />
+        </button>
+      </section>
+
       {room.directoryTree.currentDirectory instanceof FolderNode && (
         <div
+          className="d-flex gap-2 px-2 clickable border-bottom border-2"
           onClick={() => {
             // nothing much, its just typescript being typtypescript
             setCurrentDirectory(
@@ -67,7 +78,8 @@ function DirectoriesTab({ className, ...rest }: { className: string }) {
             );
           }}
         >
-          Back
+          <Icon mode={IconMode.Light} name="ellipsis.svg" />
+          <span>Back</span>
         </div>
       )}
 
@@ -99,7 +111,7 @@ function DirectoryNodeWrapper({ selected, type, name, onClick }: any) {
       case FolderNode:
         return "/folder.svg";
       case FileNode:
-        return "/file.svg";
+        return "/json.svg";
       default:
         return "/";
     }
@@ -112,7 +124,7 @@ function DirectoryNodeWrapper({ selected, type, name, onClick }: any) {
       }`}
       onClick={onClick}
     >
-      <Icon name={getIconName()} mode={IconMode.Dark} />
+      <Icon name={getIconName()} mode={IconMode.Light} />
       <span>{name}</span>
     </div>
   );

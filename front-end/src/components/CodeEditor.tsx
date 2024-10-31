@@ -1,46 +1,63 @@
-import { createContext, useContext, useState } from "react";
-import { Member, RoomContext } from "../App";
+import { useContext, useEffect, useState } from "react";
+import { Member, RoomContext, RoomContextType } from "../App";
 import CodeArea, { CursorPosition } from "./CodeArea";
 import MouseCursor from "./MouseCursor";
 import Interpolater from "../common/Interpolater";
 import ContextMenuWrapper from "./ContextMenuWrapper";
 import DirectoriesTab from "./FileBrowser/DirectoriesTab";
-
-export const CodeEditorContext = createContext<any>(undefined);
+import FilesInspector from "./FilesInspector";
+import { FileNode } from "./FileBrowser/DirectoryTree";
 
 export type EditorData = {
   lines: string[];
   cursorPosition: CursorPosition;
 };
 
-function CodeEditor({ onCompile }: any) {
-  const [room, _setRoom, socket] = useContext(RoomContext);
-  const [editorData, setEditorData] = useState<EditorData>({
-    lines: [""],
-    cursorPosition: { column: 0, line: 0 },
-  });
+function CodeEditor() {
+  const [room, setRoom, socket] = useContext<RoomContextType>(RoomContext);
+
+  const [loadedFiles, setLoadedFiles] = useState<FileNode[]>([] as FileNode[]);
+
+  useEffect(() => {
+    if (!room.selectedFile || loadedFiles.includes(room.selectedFile)) return;
+    setLoadedFiles([...loadedFiles, room.selectedFile]);
+  }, [room.selectedFile]);
+
+  function unloadFile(fileIndex: number) {
+    if (loadedFiles.length <= fileIndex) return;
+    const newLoadedFiles = [...loadedFiles];
+    if (newLoadedFiles[fileIndex] === room.selectedFile) {
+      const newRoom = { ...room };
+      newRoom.selectedFile = undefined;
+      setRoom(newRoom);
+    }
+    newLoadedFiles.splice(fileIndex, 1);
+    setLoadedFiles(newLoadedFiles);
+  }
 
   return (
     <div className="d-flex">
       <ContextMenuWrapper>
         <DirectoriesTab className="fill-screen-vertically dir-tab" />
       </ContextMenuWrapper>
-      <CodeEditorContext.Provider
-        value={{
-          editorData,
-          setEditorData,
-        }}
-      >
+
+      <div>
+        <FilesInspector files={loadedFiles} onFileClose={unloadFile} />
         <CodeArea
-          onCompile={() =>
-            onCompile(
-              editorData.lines.reduce(
-                (accumulator, currentValue) => `${accumulator}\n${currentValue}`
+          onCompile={() => {
+            /*
+              TODO: rewrite the compilation
+
+              onCompile(
+                editorData.lines.reduce(
+                  (accumulator, currentValue) =>
+                    `${accumulator}\n${currentValue}`
+                )
               )
-            )
-          }
+              */
+          }}
         />
-      </CodeEditorContext.Provider>
+      </div>
       {room.members.map(
         (member: Member, index: number) =>
           member.id !== socket.id && (

@@ -1,13 +1,14 @@
 import { useContext, useEffect, useRef, useState } from "react";
-import { CodeEditorContext, EditorData } from "./CodeEditor";
+import { EditorData } from "./CodeEditor";
 import { Vector2 } from "../common/Interpolater";
-import { Member, Room, RoomContext } from "../App";
+import { Member, Room, RoomContext, RoomContextType } from "../App";
 import Cursor from "./Cursor";
 import {
   sendMouseClicksBuffer,
   sendKeysPressedBuffer,
   sendMousePosition,
 } from "../utils/socketEventHandler";
+import Icon, { IconMode } from "../common/Icon";
 
 export type CursorPosition = {
   line: number;
@@ -48,19 +49,11 @@ type CursorSelection = {
 };
 
 export default function CodeArea({ onCompile }: CodeAreaPropsType) {
-  const [room, setRoom, socket] = useContext(RoomContext);
-
-  const {
-    editorData,
-    setEditorData,
-  }: { editorData: EditorData; setEditorData: any } =
-    useContext(CodeEditorContext);
-
   const editorRef = useRef<HTMLDivElement>(null);
+  const [room, setRoom, socket] = useContext<RoomContextType>(RoomContext);
   const [absoluteCursorPosition, setAbsoluteCursorPosition] = useState<Vector2>(
     { x: 0, y: 0 }
   );
-
   const [cursorSelection, setCursorSelection] = useState<CursorSelection>({
     start: undefined,
     end: undefined,
@@ -72,8 +65,9 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }, []);
 
   useEffect(() => {
+    if (!room.selectedFile) return;
     updateAbsoluteCursorPosition();
-  }, [editorData]);
+  }, [room.selectedFile]);
 
   function initializeSocketEventHandlers() {
     if (!socket || intitializationFlag) return;
@@ -211,164 +205,218 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   function handleKeyDown(key: string, isHoldingShift: boolean) {
     if (keysToIgnore.includes(key)) return;
 
-    setEditorData((prevEditorData: EditorData) => {
-      let { lines, cursorPosition } = { ...prevEditorData };
-      const currentLine = cursorPosition.line;
-      let line: string = lines[currentLine] || "";
+    setRoom((previousRoom: Room) => {
+      let newRoom = { ...previousRoom };
 
-      switch (key) {
-        case "Backspace":
-          const { start, end } = cursorSelection;
-          if (start && end) {
-            // used to track the number of deleted lines
-            // because the loop starts from the first up to the last element
-            // we need to delete the lines in between the start and the end of the selection
-            // and in order for us to map the currentLine to its corresponding line
-            // we need to substract the currentLine by the number of deletedLines also called the offset
-            let deletedLines = 0;
+      if (newRoom.selectedFile) {
+        const { selectedFile } = newRoom;
 
-            for (let currentLine = 0; currentLine <= end.line; currentLine++) {
-              if (start.line === currentLine && end.line === currentLine) {
-                lines[currentLine] =
-                  line.slice(0, start.column) + line.slice(end.column);
-              } else if (start.line === currentLine) {
-                lines[currentLine] = lines[currentLine].slice(0, start.column);
-              } else if (end.line === currentLine) {
-                lines[start.line] += lines[
-                  Math.min(currentLine - deletedLines, lines.length - 1)
-                ].slice(end.column);
-                lines.splice(currentLine - deletedLines, 1);
-                deletedLines++;
-              } else if (
-                start.line < currentLine &&
-                currentLine < end.line - deletedLines
+        const currentLine = selectedFile.cursorPosition.line;
+        let line = selectedFile.content[currentLine];
+
+        switch (key) {
+          case "Backspace":
+            const { start, end } = cursorSelection;
+            if (start && end) {
+              // used to track the number of deleted lines
+              // because the loop starts from the first up to the last element
+              // we need to delete the lines in between the start and the end of the selection
+              // and in order for us to map the currentLine to its corresponding line
+              // we need to substract the currentLine by the number of deletedLines also called the offset
+              let deletedLines = 0;
+
+              for (
+                let currentLine = 0;
+                currentLine <= end.line;
+                currentLine++
               ) {
-                lines.splice(currentLine, 1);
-                // done to sync deleting data
-                deletedLines++;
+                if (start.line === currentLine && end.line === currentLine) {
+                  selectedFile.content[currentLine] =
+                    line.slice(0, start.column) + line.slice(end.column);
+                } else if (start.line === currentLine) {
+                  selectedFile.content[currentLine] = selectedFile.content[
+                    currentLine
+                  ].slice(0, start.column);
+                } else if (end.line === currentLine) {
+                  selectedFile.content[start.line] += selectedFile.content[
+                    Math.min(
+                      currentLine - deletedLines,
+                      selectedFile.content.length - 1
+                    )
+                  ].slice(end.column);
+                  selectedFile.content.splice(currentLine - deletedLines, 1);
+                  deletedLines++;
+                } else if (
+                  start.line < currentLine &&
+                  currentLine < end.line - deletedLines
+                ) {
+                  selectedFile.content.splice(currentLine, 1);
+                  // done to sync deleting data
+                  deletedLines++;
+                }
               }
-            }
 
-            cursorPosition = {
-              line: start.line,
-              column: start.column,
-            };
+              selectedFile.cursorPosition = {
+                line: start.line,
+                column: start.column,
+              };
 
-            setCursorSelection({ start: undefined, end: undefined });
-          } else {
-            if (line.length) {
-              lines[currentLine] = deleteSingleCharacter(line, cursorPosition);
+              setCursorSelection({ start: undefined, end: undefined });
             } else {
-              if (lines.length > 1) {
-                lines.splice(currentLine, 1);
-                cursorPosition = {
-                  line: currentLine - 1,
-                  column: lines[currentLine - 1].length,
-                };
+              if (line.length) {
+                selectedFile.content[currentLine] = deleteSingleCharacter(
+                  line,
+                  selectedFile.cursorPosition
+                );
+              } else {
+                if (selectedFile.content.length > 1) {
+                  selectedFile.content.splice(currentLine, 1);
+                  selectedFile.cursorPosition = {
+                    line: currentLine - 1,
+                    column: selectedFile.content[currentLine - 1].length,
+                  };
+                }
               }
             }
-          }
 
-          break;
+            break;
 
-        case "Enter":
-          cursorPosition = addLine(lines, cursorPosition);
-          break;
+          case "Enter":
+            selectedFile.cursorPosition = addLine(
+              selectedFile.content,
+              selectedFile.cursorPosition
+            );
+            break;
 
-        case "ArrowUp":
-          cursorPosition = moveCursor(
-            { line: currentLine - 1, column: cursorPosition.column },
-            cursorPosition,
-            lines
-          );
+          case "ArrowUp":
+            selectedFile.cursorPosition = moveCursor(
+              {
+                line: currentLine - 1,
+                column: selectedFile.cursorPosition.column,
+              },
+              selectedFile.cursorPosition,
+              selectedFile.content
+            );
 
-          updateCursorSelection(
-            {
-              column: cursorSelection.end?.column || cursorPosition.column,
-              line: cursorPosition.line - 1,
-            },
-            cursorPosition,
-            isHoldingShift
-          );
+            updateCursorSelection(
+              {
+                column:
+                  cursorSelection.end?.column ||
+                  selectedFile.cursorPosition.column,
+                line: selectedFile.cursorPosition.line - 1,
+              },
+              selectedFile.cursorPosition,
+              isHoldingShift
+            );
 
-          break;
+            break;
 
-        case "ArrowDown":
-          cursorPosition = moveCursor(
-            { line: currentLine + 1, column: cursorPosition.column },
-            cursorPosition,
-            lines
-          );
+          case "ArrowDown":
+            selectedFile.cursorPosition = moveCursor(
+              {
+                line: currentLine + 1,
+                column: selectedFile.cursorPosition.column,
+              },
+              selectedFile.cursorPosition,
+              selectedFile.content
+            );
 
-          updateCursorSelection(
-            {
-              column: cursorSelection.end?.column || cursorPosition.column,
-              line: cursorPosition.line + 1,
-            },
-            cursorPosition,
-            isHoldingShift
-          );
+            updateCursorSelection(
+              {
+                column:
+                  cursorSelection.end?.column ||
+                  selectedFile.cursorPosition.column,
+                line: selectedFile.cursorPosition.line + 1,
+              },
+              selectedFile.cursorPosition,
+              isHoldingShift
+            );
 
-          break;
+            break;
 
-        case "ArrowRight":
-          cursorPosition = moveCursor(
-            { line: currentLine, column: cursorPosition.column + 1 },
-            cursorPosition,
-            lines
-          );
+          case "ArrowRight":
+            selectedFile.cursorPosition = moveCursor(
+              {
+                line: currentLine,
+                column: selectedFile.cursorPosition.column + 1,
+              },
+              selectedFile.cursorPosition,
+              selectedFile.content
+            );
 
-          updateCursorSelection(
-            { column: cursorPosition.column - 1, line: cursorPosition.line },
-            cursorPosition,
-            isHoldingShift
-          );
+            updateCursorSelection(
+              {
+                column: selectedFile.cursorPosition.column - 1,
+                line: selectedFile.cursorPosition.line,
+              },
+              selectedFile.cursorPosition,
+              isHoldingShift
+            );
 
-          break;
+            break;
 
-        case "ArrowLeft":
-          cursorPosition = moveCursor(
-            { line: currentLine, column: cursorPosition.column - 1 },
-            cursorPosition,
-            lines
-          );
+          case "ArrowLeft":
+            selectedFile.cursorPosition = moveCursor(
+              {
+                line: currentLine,
+                column: selectedFile.cursorPosition.column - 1,
+              },
+              selectedFile.cursorPosition,
+              selectedFile.content
+            );
 
-          updateCursorSelection(
-            { column: cursorPosition.column + 1, line: cursorPosition.line },
-            cursorPosition,
-            isHoldingShift
-          );
+            updateCursorSelection(
+              {
+                column: selectedFile.cursorPosition.column + 1,
+                line: selectedFile.cursorPosition.line,
+              },
+              selectedFile.cursorPosition,
+              isHoldingShift
+            );
 
-          break;
+            break;
 
-        case "Home":
-          cursorPosition = moveCursor(
-            { line: currentLine, column: 0 },
-            cursorPosition,
-            lines
-          );
-          break;
+          case "Home":
+            selectedFile.cursorPosition = moveCursor(
+              { line: currentLine, column: 0 },
+              selectedFile.cursorPosition,
+              selectedFile.content
+            );
+            break;
 
-        case "End":
-          cursorPosition = moveCursor(
-            { line: currentLine, column: line.length },
-            cursorPosition,
-            lines
-          );
-          break;
+          case "End":
+            selectedFile.cursorPosition = moveCursor(
+              { line: currentLine, column: line.length },
+              selectedFile.cursorPosition,
+              selectedFile.content
+            );
+            break;
 
-        case "Tab":
-          lines[currentLine] = appendCodeToLine(line, "  ", cursorPosition);
-          break;
+          case "Tab":
+            selectedFile.content[currentLine] = appendCodeToLine(
+              line,
+              "  ",
+              selectedFile.cursorPosition
+            );
+            break;
 
-        default:
-          lines[currentLine] = appendCodeToLine(line, key, cursorPosition);
-          break;
+          default:
+            selectedFile.content[currentLine] = appendCodeToLine(
+              line,
+              key,
+              selectedFile.cursorPosition
+            );
+            break;
+        }
       }
 
-      return { lines, cursorPosition };
+      return newRoom;
     });
   }
+
+  useEffect(() => {
+    console.log(room.selectedFile);
+  }, [room.selectedFile]);
 
   function handleMouseDown(click: MouseClick) {
     const elements = document.elementsFromPoint(
@@ -405,12 +453,14 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }
 
   function getNodeAndOffset() {
+    if (!room.selectedFile) return { node: null, offset: 0 };
+
     let charCount = 0;
     let targetNode = null;
     let offset = 0;
 
     const { column: currentCursorColumn, line: currentCursorLine } =
-      editorData.cursorPosition;
+      room.selectedFile.cursorPosition;
 
     const editor = editorRef.current;
     if (!editor) return { node: null, offset: 0 };
@@ -472,91 +522,106 @@ export default function CodeArea({ onCompile }: CodeAreaPropsType) {
   }
 
   function renderCode() {
+    if (!room.selectedFile) return;
+
     const getLineClasses = (index: number) =>
-      `line ${index === editorData.cursorPosition.line && " line-highlited"}`;
+      `line ${
+        index === room.selectedFile?.cursorPosition.line && " line-highlited"
+      }`;
 
-    return editorData.lines.map((code: string, currentLine: number) => {
-      return (
-        <pre key={currentLine} className={getLineClasses(currentLine)}>
-          {(() => {
-            const { start, end } = cursorSelection;
+    return room.selectedFile.content.map(
+      (code: string, currentLine: number) => {
+        return (
+          <pre key={currentLine} className={getLineClasses(currentLine)}>
+            {(() => {
+              const { start, end } = cursorSelection;
 
-            if (start && end) {
-              if (start.line === currentLine && end.line === currentLine) {
-                return (
-                  <>
-                    {code.slice(0, start.column)}
-                    <span className="selection">
-                      {code.slice(start.column, end.column)}
-                    </span>
-                    {code.slice(end.column)}
-                  </>
-                );
-              } else if (start.line === currentLine) {
-                return (
-                  <>
-                    {code.slice(0, start.column)}
-                    <span className="selection">
-                      {code.slice(start.column)}
-                    </span>
-                  </>
-                );
-              } else if (end.line === currentLine) {
-                return (
-                  <>
-                    <span className="selection">
-                      {code.slice(0, end.column)}
-                    </span>
-                    {code.slice(end.column)}
-                  </>
-                );
-              } else if (start.line < currentLine && currentLine < end.line) {
-                return <span className="selection">{code}</span>;
+              if (start && end) {
+                if (start.line === currentLine && end.line === currentLine) {
+                  return (
+                    <>
+                      {code.slice(0, start.column)}
+                      <span className="selection">
+                        {code.slice(start.column, end.column)}
+                      </span>
+                      {code.slice(end.column)}
+                    </>
+                  );
+                } else if (start.line === currentLine) {
+                  return (
+                    <>
+                      {code.slice(0, start.column)}
+                      <span className="selection">
+                        {code.slice(start.column)}
+                      </span>
+                    </>
+                  );
+                } else if (end.line === currentLine) {
+                  return (
+                    <>
+                      <span className="selection">
+                        {code.slice(0, end.column)}
+                      </span>
+                      {code.slice(end.column)}
+                    </>
+                  );
+                } else if (start.line < currentLine && currentLine < end.line) {
+                  return <span className="selection">{code}</span>;
+                }
               }
-            }
 
-            return code;
-          })()}
-        </pre>
-      );
-    });
+              return code;
+            })()}
+          </pre>
+        );
+      }
+    );
   }
 
   return (
-    <div
-      className="fill-screen"
-      onMouseDown={(e) => {
-        myMouseClicksBuffer.push({
-          type: (e.button === 0 && "LMB") || (e.button === 2 && "RMB") || "",
-          position: { x: e.clientX, y: e.clientY },
-        });
-      }}
-      onMouseMove={(e) => (myMousePosition = { x: e.clientX, y: e.clientY })}
-    >
-      <button onClick={() => onCompile(editorData.lines)}>Compile</button>
+    room.selectedFile && (
       <div
-        tabIndex={0}
-        onKeyDown={(e) => {
-          e.preventDefault();
-          myKeysPressedBuffer.push({ key: e.key, isShifting: e.shiftKey });
-          handleKeyDown(e.key, e.shiftKey);
+        className="fill-screen"
+        onMouseDown={(e) => {
+          myMouseClicksBuffer.push({
+            type: (e.button === 0 && "LMB") || (e.button === 2 && "RMB") || "",
+            position: { x: e.clientX, y: e.clientY },
+          });
         }}
-        className="d-flex"
+        onMouseMove={(e) => (myMousePosition = { x: e.clientX, y: e.clientY })}
       >
-        <div className="d-flex flex-column align-items-center line-counter">
-          {editorData.lines.map((_line: string, index: number) => (
-            <span key={index}>{index + 1}</span>
-          ))}
-        </div>
-        <Cursor position={absoluteCursorPosition} />
+        <button>
+          <Icon
+            onClick={() => onCompile(room.selectedFile?.content)}
+            mode={IconMode.Light}
+            name="run.svg"
+            width={20}
+          />
+        </button>
         <div
-          ref={editorRef}
-          className="d-flex flex-column flex-grow-1 code-area"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            e.preventDefault();
+            myKeysPressedBuffer.push({ key: e.key, isShifting: e.shiftKey });
+            handleKeyDown(e.key, e.shiftKey);
+          }}
+          className="d-flex"
         >
-          {renderCode()}
+          <div className="d-flex flex-column align-items-center line-counter">
+            {room.selectedFile.content.map((_line: string, index: number) => (
+              <span key={index}>{index + 1}</span>
+            ))}
+          </div>
+          <Cursor position={absoluteCursorPosition} />
+          <div
+            ref={editorRef}
+            className="d-flex flex-column flex-grow-1 code-area"
+          >
+            {renderCode()}
+          </div>
         </div>
       </div>
-    </div>
+    )
   );
 }
 
