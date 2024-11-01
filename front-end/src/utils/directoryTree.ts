@@ -1,4 +1,7 @@
-import { CursorPosition } from "../CodeArea";
+import {
+  CursorPosition,
+  CursorSelection,
+} from "../components/Controlled/CodeEditor";
 
 export type DirectoryNode = FolderNode | FileNode;
 
@@ -17,6 +20,7 @@ export class FileNode extends DirectoryTreeNode {
   public name: string;
   public content: string[];
   public cursorPosition: CursorPosition;
+  public cursorSelection: CursorSelection;
 
   constructor(parent: FolderNode | undefined, name: string, index: number) {
     super(parent, [...(parent?.indexes || []), index]);
@@ -24,6 +28,7 @@ export class FileNode extends DirectoryTreeNode {
     this.name = name;
     this.content = ["// write you code here"];
     this.cursorPosition = { line: 0, column: 0 };
+    this.cursorSelection = {};
   }
 }
 
@@ -51,12 +56,14 @@ export class FolderNode extends DirectoryTreeNode {
 }
 
 class DirectoryTree {
+  public selectedFile: FileNode;
   public children: DirectoryNode[];
   public currentDirectory: FolderNode | DirectoryTree;
 
   constructor() {
     this.children = [];
     this.currentDirectory = this;
+    this.selectedFile = {} as FileNode;
   }
 
   appendFile = (name: string): FileNode => {

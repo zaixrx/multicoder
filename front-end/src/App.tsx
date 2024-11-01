@@ -1,19 +1,19 @@
-import { useState, useEffect, createContext, useRef } from "react";
-import CodeEditor from "./components/CodeEditor";
-import "./design.css";
-import ConnectionHub from "./components/ConnectionHub";
+import { useState, useEffect } from "react";
+import { Socket } from "socket.io-client";
 import {
   makeConnection,
   sendRoomJoinRequest,
 } from "./utils/socketEventHandler";
-import { Socket } from "socket.io-client";
 import Queue from "./utils/queue";
 import { Vector2 } from "./common/Interpolater";
-import DirectoryTree, {
-  FileNode,
-} from "./components/FileBrowser/DirectoryTree";
+import DirectoryTree, { FileNode, FolderNode } from "./utils/directoryTree";
+import ConnectionHub from "./components/ConnectionHub";
+import CodeEditorManager from "./components/Managers/CodeEditorManager";
 
-export const RoomContext = createContext<any>(undefined);
+import "./design.css";
+import FileManager from "./components/Managers/FileManager";
+import ContextMenuWrapper from "./components/ContextMenuWrapper";
+
 export type RoomContextType = [
   room: Room,
   setRoom: React.Dispatch<React.SetStateAction<Room>>,
@@ -26,11 +26,7 @@ export default function App() {
     id: "",
     members: [],
     directoryTree: new DirectoryTree(),
-    selectedFile: undefined,
   });
-
-  //const consoleOutput = useRef<HTMLDivElement>(null);
-  const outputFrameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     let socket = makeConnection();
@@ -50,42 +46,94 @@ export default function App() {
     });
   }, []);
 
-  function compileCode(code: string) {
-    if (!outputFrameRef.current) return;
-    outputFrameRef.current.srcdoc = `
-            <html>
-            <body>
-                <script>
-                    try {
-                        ${code}
-                    } catch (error) {
-                        document.body.innerHTML = '<pre>' + error.toString() + '</pre>';
-                    }
-                <\/script>
-            </body>
-            </html>
-            `;
+  function setSelectedFile(
+    newFile: FileNode | ((previousSelectedFile: FileNode) => FileNode)
+  ) {
+    const _room = { ...room };
+    if (typeof newFile === "function") {
+      _room.directoryTree.selectedFile = newFile(
+        room.directoryTree.selectedFile
+      );
+    } else {
+      _room.directoryTree.selectedFile = newFile;
+    }
+    setRoom(_room);
   }
 
-  return (
-    socket && (
-      <main className="fill-screen-vertically">
-        <span>Socket Id: {socket.id}</span>
-        <RoomContext.Provider value={[room, setRoom, socket]}>
-          {room.id ? (
-            <CodeEditor onCompile={compileCode} />
-          ) : (
-            <ConnectionHub
-              onClientConnect={(socketToConnectToId: string) =>
-                sendRoomJoinRequest(socketToConnectToId)
-              }
+  function setCurrentDirectory(currentDirectory: FolderNode) {
+    const _room = { ...room };
+    _room.directoryTree.currentDirectory = currentDirectory;
+    setRoom(_room);
+  }
+
+  function appendFile(fileName: string) {
+    const newRoom = { ...room };
+    const file = newRoom.directoryTree.appendFile(fileName);
+    setRoom(newRoom);
+    return file;
+  }
+
+  function appendFolder(folderName: string) {
+    const newRoom = { ...room };
+    const folder = newRoom.directoryTree.appendFolder(folderName);
+    setRoom(newRoom);
+    return folder;
+  }
+
+  return socket ? (
+    <main>
+      {room.id ? (
+        <div className="d-flex fill-screen-vertically">
+          <ContextMenuWrapper>
+            <FileManager
+              directoryTree={room.directoryTree}
+              appendFile={appendFile}
+              appendFolder={appendFolder}
+              setCurrentDirectory={setCurrentDirectory}
+              setSelectedFile={setSelectedFile}
+            />
+          </ContextMenuWrapper>
+          {room.directoryTree.selectedFile.indexes && (
+            <CodeEditorManager
+              selectedFile={room.directoryTree.selectedFile}
+              setSelectedFile={setSelectedFile}
             />
           )}
-        </RoomContext.Provider>
-      </main>
-    )
+        </div>
+      ) : (
+        <>
+          <span>Socket Id: {socket.id}</span>
+          <ConnectionHub
+            onClientConnect={(socketToConnectToId: string) =>
+              sendRoomJoinRequest(socketToConnectToId)
+            }
+            socketID={socket.id || ""}
+          />
+        </>
+      )}
+    </main>
+  ) : (
+    "It looks like we are having trouble to establish a connection with you"
   );
 }
+
+/*
+{room.members.map(
+        (member: Member, index: number) =>
+          member.id !== socket.id && (
+            <Interpolater
+              key={index}
+              positionBuffer={member.mousePositionBuffer}
+            >
+              <MouseCursor
+                position={{
+                  x: 0,
+                  y: 0,
+                }}
+              />
+            </Interpolater>
+          )
+      )} */
 
 export type Member = {
   id: string;
@@ -94,7 +142,6 @@ export type Member = {
 
 export type Room = {
   id: string;
-  directoryTree: DirectoryTree;
-  selectedFile: FileNode | undefined;
   members: Member[];
+  directoryTree: DirectoryTree;
 };

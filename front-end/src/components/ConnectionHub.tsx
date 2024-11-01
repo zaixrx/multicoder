@@ -1,17 +1,16 @@
-import { useContext, useEffect, useRef, useState } from "react";
-import { RoomContext, RoomContextType } from "../App";
+import { useEffect, useRef, useState } from "react";
 
 interface ConnectionHubProps {
+  socketID: string;
   onClientConnect: Function;
 }
 
-function ConnectionHub({ onClientConnect }: ConnectionHubProps) {
+function ConnectionHub({ onClientConnect, socketID }: ConnectionHubProps) {
   const [clientToConnectId, setClientToConnectId] = useState<string>("");
   const establishConnectionButtonRef = useRef<HTMLButtonElement>(null);
-  const [_room, _setRoom, socket] = useContext<RoomContextType>(RoomContext);
 
   useEffect(() => {
-    setClientToConnectId(socket.id || "");
+    setClientToConnectId(socketID);
   }, []);
 
   useEffect(() => {

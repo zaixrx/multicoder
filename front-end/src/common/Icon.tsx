@@ -3,7 +3,7 @@ export enum IconMode {
   Light,
 }
 
-function Icon({ mode = IconMode.Dark, name, ...rest }: any) {
+function Icon({ name, mode = IconMode.Light, ...rest }: any) {
   function getIconPath() {
     let path = "";
 

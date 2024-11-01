@@ -1,6 +1,6 @@
 import io, { Socket } from "socket.io-client";
 import { Vector2 } from "../common/Interpolater";
-import { MouseClick } from "../components/CodeArea";
+import { MouseClick } from "../components/Controlled/CodeEditor";
 
 let socket: Socket;
 export function makeConnection() {
