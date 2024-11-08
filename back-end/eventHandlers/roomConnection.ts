@@ -3,6 +3,7 @@ import { Appdata, EventHandler } from "./socketTypes";
 import { getSocket } from "./utils";
 import { ObjectId } from "bson";
 import { MousePosition } from "./roomCommunication";
+import DirectoryTree from "./utils/directoryTree";
 
 export type Member = {
   id: string;
@@ -12,23 +13,24 @@ export type Member = {
 export type Room = {
   id: ObjectId;
   members: Member[];
+  directoryTree: DirectoryTree;
 };
 
-enum messages {
+enum Message {
   ROOM_JOIN_REQUEST = "roomJoinRequest",
   ROOM_JOIN_RESPONSE = "roomJoinResponse",
 }
 
 const connect = (app: Appdata, currentSocket: Socket): EventHandler => ({
-  [messages.ROOM_JOIN_REQUEST]: roomJoinRequestHandler(app, currentSocket),
-  [messages.ROOM_JOIN_RESPONSE]: roomJoinResponseHandler(app, currentSocket),
+  [Message.ROOM_JOIN_REQUEST]: roomJoinRequestHandler(app, currentSocket),
+  [Message.ROOM_JOIN_RESPONSE]: roomJoinResponseHandler(app, currentSocket),
 });
 
 const roomJoinRequestHandler =
   (app: Appdata, currentSocket: Socket) => (socketToConnectToId: string) => {
     const socketToConnectTo = getSocket(app, socketToConnectToId);
     if (socketToConnectTo) {
-      socketToConnectTo.emit(messages.ROOM_JOIN_REQUEST, currentSocket.id);
+      socketToConnectTo.emit(Message.ROOM_JOIN_REQUEST, currentSocket.id);
     }
   };
 
@@ -53,6 +55,7 @@ function createRoom(app: Appdata, members: Socket[]) {
       id: m.id,
       mousePosition: { x: 0, y: 0 },
     })),
+    directoryTree: {} as DirectoryTree,
   };
   members.forEach((member) => {
     member.emit("roomCreated", room);

@@ -1,6 +1,7 @@
 import { Socket } from "socket.io";
 import { Appdata, EventHandler } from "./socketTypes";
 import { getRoom, getSocket } from "./utils";
+import DirectoryTree from "./utils/directoryTree";
 
 export type MouseClick = {
   type: string;
@@ -12,16 +13,19 @@ export type MousePosition = {
   y: number;
 };
 
-enum messages {
+enum Messages {
   MOUSE_POSITION = "mousePosition",
   KEYS_PRESSED = "keysPressed",
-  MOUSE_CLICKS = "mouseClicks",
+  FILE_CREATED = "fileCreated",
+  FILE_SELECTED = "folderCreated",
+  FOLDER_CREATED = "folderCreated",
+  DIRECTORY_SELECTED = "directorySelected",
 }
 
 const communication = (app: Appdata, currentSocket: Socket): EventHandler => ({
-  [messages.MOUSE_POSITION]: mousePositionHandler(app, currentSocket),
-  [messages.KEYS_PRESSED]: keysPressedHandler(app, currentSocket),
-  [messages.MOUSE_CLICKS]: mouseClicksHandler(app, currentSocket),
+  [Messages.MOUSE_POSITION]: mousePositionHandler(app, currentSocket),
+  [Messages.KEYS_PRESSED]: keysPressedHandler(app, currentSocket),
+  [Messages.FILE_CREATED]: fileCreatedHandler(app, currentSocket),
 });
 
 const mousePositionHandler =
@@ -33,7 +37,7 @@ const mousePositionHandler =
       if (member.id === currentSocket.id) return;
       const memberSocket = getSocket(app, member.id);
       memberSocket?.emit(
-        messages.MOUSE_POSITION,
+        Messages.MOUSE_POSITION,
         currentSocket.id,
         mousePosition
       );
@@ -48,19 +52,20 @@ const keysPressedHandler =
     room.members.forEach((member) => {
       if (member.id === currentSocket.id) return;
       const memberSocket = getSocket(app, member.id);
-      memberSocket?.emit(messages.KEYS_PRESSED, currentSocket.id, keysPressed);
+      memberSocket?.emit(Messages.KEYS_PRESSED, currentSocket.id, keysPressed);
     });
   };
 
-const mouseClicksHandler =
+const fileCreatedHandler =
   (app: Appdata, currentSocket: Socket) =>
-  (roomId: string, mouseClicks: MouseClick[]) => {
+  (roomId: string, createdFile: any) => {
     const room = getRoom(app, roomId);
     if (!room) return;
+    room.directoryTree.selectedDirectory.appendFile(createdFile);
     room.members.forEach((member) => {
       if (member.id === currentSocket.id) return;
       const memberSocket = getSocket(app, member.id);
-      memberSocket?.emit(messages.MOUSE_CLICKS, currentSocket.id, mouseClicks);
+      memberSocket?.emit(Messages.FILE_CREATED, currentSocket.id, createdFile);
     });
   };
 

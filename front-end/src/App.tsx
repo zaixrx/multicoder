@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Socket } from "socket.io-client";
 import {
   makeConnection,
@@ -27,6 +27,7 @@ export default function App() {
     members: [],
     directoryTree: new DirectoryTree(),
   });
+  const resultFrameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     let socket = makeConnection();
@@ -46,6 +47,13 @@ export default function App() {
     });
   }, []);
 
+  function postDirectoryTreeChanges(
+    data: FileNode | FolderNode,
+    messageType: RoomMessage
+  ) {
+    socket?.emit(messageType, room.id, data);
+  }
+
   function setSelectedFile(
     newFile: FileNode | ((previousSelectedFile: FileNode) => FileNode)
   ) {
@@ -58,18 +66,27 @@ export default function App() {
       _room.directoryTree.selectedFile = newFile;
     }
     setRoom(_room);
+    postDirectoryTreeChanges(
+      _room.directoryTree.selectedFile,
+      RoomMessage.
+    );
   }
 
-  function setCurrentDirectory(currentDirectory: FolderNode) {
+  function setSelectedDirectory(selectedDirectory: FolderNode) {
     const _room = { ...room };
-    _room.directoryTree.currentDirectory = currentDirectory;
+    _room.directoryTree.selectedDirectory = selectedDirectory;
     setRoom(_room);
+    postDirectoryTreeChanges(
+      selectedDirectory,
+      DirectoryTreeClientMessage.DirectorySelected
+    );
   }
 
   function appendFile(fileName: string) {
     const newRoom = { ...room };
     const file = newRoom.directoryTree.appendFile(fileName);
     setRoom(newRoom);
+    postDirectoryTreeChanges(file, DirectoryTreeClientMessage.FileCreated);
     return file;
   }
 
@@ -77,7 +94,27 @@ export default function App() {
     const newRoom = { ...room };
     const folder = newRoom.directoryTree.appendFolder(folderName);
     setRoom(newRoom);
+    postDirectoryTreeChanges(folder, DirectoryTreeClientMessage.FolderCreated);
     return folder;
+  }
+
+  function interpretJSCode(fileContent: string[]) {
+    if (!resultFrameRef.current) return;
+
+    const mergedFileContent = fileContent.join("");
+    resultFrameRef.current.srcdoc = `
+    <html>
+    <body>
+        <script>
+            try {
+                ${mergedFileContent}
+            } catch (error) {
+                document.body.innerHTML = '<pre>' + error.toString() + '</pre>';
+            }
+        <\/script>
+    </body>
+    </html>
+`;
   }
 
   return socket ? (
@@ -89,15 +126,19 @@ export default function App() {
               directoryTree={room.directoryTree}
               appendFile={appendFile}
               appendFolder={appendFolder}
-              setCurrentDirectory={setCurrentDirectory}
+              setCurrentDirectory={setSelectedDirectory}
               setSelectedFile={setSelectedFile}
             />
           </ContextMenuWrapper>
           {room.directoryTree.selectedFile.indexes && (
-            <CodeEditorManager
-              selectedFile={room.directoryTree.selectedFile}
-              setSelectedFile={setSelectedFile}
-            />
+            <div className="flex-column">
+              <CodeEditorManager
+                interpretJSCode={interpretJSCode}
+                selectedFile={room.directoryTree.selectedFile}
+                setSelectedFile={setSelectedFile}
+              />
+              <iframe ref={resultFrameRef} />
+            </div>
           )}
         </div>
       ) : (
@@ -107,7 +148,6 @@ export default function App() {
             onClientConnect={(socketToConnectToId: string) =>
               sendRoomJoinRequest(socketToConnectToId)
             }
-            socketID={socket.id || ""}
           />
         </>
       )}
@@ -145,3 +185,12 @@ export type Room = {
   members: Member[];
   directoryTree: DirectoryTree;
 };
+
+enum RoomMessage {
+  MOUSE_POSITION = "mousePosition",
+  KEYS_PRESSED = "keysPressed",
+  FILE_CREATED = "fileCreated",
+  FILE_SELECTED = "folderCreated",
+  FOLDER_CREATED = "folderCreated",
+  DIRECTORY_SELECTED = "directorySelected",
+}

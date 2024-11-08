@@ -6,6 +6,7 @@ import CodeEditor from "../Controlled/CodeEditor";
 function CodeEditorManager({
   selectedFile,
   setSelectedFile,
+  interpretJSCode,
 }: CodeEditorManagerProps) {
   const [loadedFiles, setLoadedFiles] = useState<FileNode[]>([] as FileNode[]);
 
@@ -42,7 +43,9 @@ function CodeEditorManager({
         onFileSelect={setSelectedFile}
         onFileClose={handleFileClose}
       />
-      <CodeEditorContext.Provider value={{ selectedFile, setSelectedFile }}>
+      <CodeEditorContext.Provider
+        value={{ selectedFile, setSelectedFile, interpretJSCode }}
+      >
         <CodeEditor />
       </CodeEditorContext.Provider>
     </div>
@@ -51,6 +54,7 @@ function CodeEditorManager({
 
 type CodeEditorManagerProps = {
   selectedFile: FileNode;
+  interpretJSCode: (fileContent: string[]) => void;
   setSelectedFile: (
     newFile: FileNode | ((previousSelectedFile: FileNode) => FileNode)
   ) => void;
@@ -58,6 +62,7 @@ type CodeEditorManagerProps = {
 
 export type CodeEditorData = {
   selectedFile: FileNode;
+  interpretJSCode: (fileContent: string[]) => void;
   setSelectedFile: (
     newFile: FileNode | ((previousSelectedFile: FileNode) => FileNode)
   ) => void;

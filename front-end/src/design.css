@@ -39,9 +39,8 @@ main {
   background-color: blue;
 }
 
-.fill-screen {
+.fill-screen-horizontally {
   width: 100vw;
-  height: 100vh;
 }
 
 .fill-screen-vertically {

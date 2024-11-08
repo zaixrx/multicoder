@@ -1,7 +1,12 @@
-import {
-  CursorPosition,
-  CursorSelection,
-} from "../components/Controlled/CodeEditor";
+export type CursorPosition = {
+  line: number;
+  column: number;
+};
+
+export type CursorSelection = {
+  start?: CursorPosition;
+  end?: CursorPosition;
+};
 
 export type DirectoryNode = FolderNode | FileNode;
 

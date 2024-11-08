@@ -78,12 +78,12 @@ function FileManager({
         </button>
       </section>
 
-      {directoryTree.currentDirectory instanceof FolderNode && (
+      {directoryTree.selectedDirectory instanceof FolderNode && (
         <div
           className="d-flex gap-2 px-2 clickable border-bottom border-2"
           onClick={() => {
             setCurrentDirectory(
-              (directoryTree.currentDirectory as FolderNode)
+              (directoryTree.selectedDirectory as FolderNode)
                 .parent as FolderNode
             );
           }}
@@ -93,7 +93,7 @@ function FileManager({
         </div>
       )}
 
-      {directoryTree.currentDirectory.children.map((directoryNode, index) => {
+      {directoryTree.selectedDirectory.children.map((directoryNode, index) => {
         return (
           <DirectoryNodeWrapper
             selected={

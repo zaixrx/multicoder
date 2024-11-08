@@ -24,7 +24,8 @@ const keysToIgnore = [
 ];
 
 function CodeEditor() {
-  const { selectedFile, setSelectedFile } = useContext(CodeEditorContext);
+  const { selectedFile, setSelectedFile, interpretJSCode } =
+    useContext(CodeEditorContext);
 
   const editorRef = useRef<HTMLDivElement>(null);
   const [absoluteCursorPosition, setAbsoluteCursorPosition] = useState<Vector2>(
@@ -478,8 +479,8 @@ function CodeEditor() {
 
   return (
     selectedFile && (
-      <div className="fill-screen">
-        <button>
+      <div className="fill-screen-horizontally">
+        <button onClick={() => interpretJSCode(selectedFile.content)}>
           <Icon name="run.svg" width={20} />
         </button>
         <div
