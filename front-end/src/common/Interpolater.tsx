@@ -1,5 +1,6 @@
 import { Children, cloneElement, useEffect, useState } from "react";
-import Queue from "../utils/queue";
+import Queue from "../assets/queue";
+import { Vector2 } from "../assets/types/messageTypes";
 
 const animationTime = 0.1;
 
@@ -59,8 +60,3 @@ function Interpolater({ children, positionBuffer }: InterpolaterProps) {
 
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export default Interpolater;
-
-export type Vector2 = {
-  x: number;
-  y: number;
-};

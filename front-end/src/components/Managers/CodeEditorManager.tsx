@@ -1,7 +1,7 @@
 import { useEffect, useState, createContext } from "react";
-import { FileNode } from "../../utils/directoryTree";
-import FilesInspector from "../Controlled/FilesInspector";
+import { FileNode } from "../../assets/directoryTree";
 import CodeEditor from "../Controlled/CodeEditor";
+import FilesInspector from "../Controlled/FilesInspector";
 
 function CodeEditorManager({
   selectedFile,

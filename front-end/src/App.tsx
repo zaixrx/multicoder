@@ -1,27 +1,27 @@
 import { useState, useEffect, useRef } from "react";
-import { Socket } from "socket.io-client";
 import {
   makeConnection,
-  sendRoomJoinRequest,
-} from "./utils/socketEventHandler";
-import Queue from "./utils/queue";
-import { Vector2 } from "./common/Interpolater";
-import DirectoryTree, { FileNode, FolderNode } from "./utils/directoryTree";
+} from "./assets/socketEventHandler";
+import { Messages, Vector2 } from "./assets/types/messageTypes";
+import DirectoryTree, { FileNode, FolderNode } from "./assets/directoryTree";
+import { Client } from "./assets/types/socketTypes";
+import { Room } from "./assets/types/roomTypes";
+import Queue from "./assets/queue";
+
 import ConnectionHub from "./components/ConnectionHub";
 import CodeEditorManager from "./components/Managers/CodeEditorManager";
-
-import "./design.css";
 import FileManager from "./components/Managers/FileManager";
 import ContextMenuWrapper from "./components/ContextMenuWrapper";
+import "./design.css";
 
 export type RoomContextType = [
   room: Room,
   setRoom: React.Dispatch<React.SetStateAction<Room>>,
-  socket: Socket
+  client: Client
 ];
 
 export default function App() {
-  const [socket, setSocket] = useState<Socket | undefined>();
+  const [client, setClient] = useState<Client | undefined>();
   const [room, setRoom] = useState<Room>({
     id: "",
     members: [],
@@ -30,55 +30,56 @@ export default function App() {
   const resultFrameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    let socket = makeConnection();
+    const socket = makeConnection();
+    
     socket.on("connect", () => {
-      socket.on("roomJoinRequest", (clientWhoRequestedToJoinId: string) => {
-        socket.emit("roomJoinResponse", clientWhoRequestedToJoinId, true);
+      socket.on(Messages.ROOM_JOIN_REQUEST, (clientWhoRequestedToJoinId: string) => {
+        alert(`client ${clientWhoRequestedToJoinId} requested to join you`);
+        socket.emit(Messages.ROOM_JOIN_RESPONSE, clientWhoRequestedToJoinId, true);
       });
 
-      socket.on("roomCreated", (_room: Room) => {
+      socket.on(Messages.ROOM_CREATED, (_room: Room) => {
         _room.members.forEach((member) => {
-          member.mousePositionBuffer = new Queue<Vector2>();
+          member.mousePositionQueue = new Queue<Vector2>();
         });
         _room.directoryTree = new DirectoryTree();
         setRoom(_room);
       });
-      setSocket(socket);
+
+      setClient(new Client(socket, 0));
     });
   }, []);
 
   function postDirectoryTreeChanges(
+    message: Messages,
     data: FileNode | FolderNode,
-    messageType: RoomMessage
   ) {
-    socket?.emit(messageType, room.id, data);
+    client?.send(message, room.id, data);
   }
 
   function setSelectedFile(
     newFile: FileNode | ((previousSelectedFile: FileNode) => FileNode)
   ) {
     const _room = { ...room };
-    if (typeof newFile === "function") {
-      _room.directoryTree.selectedFile = newFile(
-        room.directoryTree.selectedFile
-      );
-    } else {
-      _room.directoryTree.selectedFile = newFile;
-    }
+    _room.directoryTree.selectedFile = typeof newFile === "function" ? newFile(
+      room.directoryTree.selectedFile
+    ) : newFile;
+
     setRoom(_room);
     postDirectoryTreeChanges(
-      _room.directoryTree.selectedFile,
-      RoomMessage.
+      Messages.FILE_SELECTED,
+      _room.directoryTree.selectedFile
     );
   }
 
   function setSelectedDirectory(selectedDirectory: FolderNode) {
     const _room = { ...room };
     _room.directoryTree.selectedDirectory = selectedDirectory;
+
     setRoom(_room);
     postDirectoryTreeChanges(
-      selectedDirectory,
-      DirectoryTreeClientMessage.DirectorySelected
+      Messages.DIRECTORY_SELECTED,
+      selectedDirectory
     );
   }
 
@@ -86,7 +87,8 @@ export default function App() {
     const newRoom = { ...room };
     const file = newRoom.directoryTree.appendFile(fileName);
     setRoom(newRoom);
-    postDirectoryTreeChanges(file, DirectoryTreeClientMessage.FileCreated);
+    
+    postDirectoryTreeChanges(Messages.FILE_CREATED, file);
     return file;
   }
 
@@ -94,7 +96,8 @@ export default function App() {
     const newRoom = { ...room };
     const folder = newRoom.directoryTree.appendFolder(folderName);
     setRoom(newRoom);
-    postDirectoryTreeChanges(folder, DirectoryTreeClientMessage.FolderCreated);
+
+    postDirectoryTreeChanges(Messages.FOLDER_CREATED, folder);
     return folder;
   }
 
@@ -117,7 +120,7 @@ export default function App() {
 `;
   }
 
-  return socket ? (
+  return client ? (
     <main>
       {room.id ? (
         <div className="d-flex fill-screen-vertically">
@@ -143,10 +146,10 @@ export default function App() {
         </div>
       ) : (
         <>
-          <span>Socket Id: {socket.id}</span>
+          <span>Client Id: {client.id}</span>
           <ConnectionHub
-            onClientConnect={(socketToConnectToId: string) =>
-              sendRoomJoinRequest(socketToConnectToId)
+            onClientConnect={(clientToConnectToId: string) =>
+              client.send(Messages.ROOM_JOIN_REQUEST, clientToConnectToId)
             }
           />
         </>
@@ -174,23 +177,3 @@ export default function App() {
             </Interpolater>
           )
       )} */
-
-export type Member = {
-  id: string;
-  mousePositionBuffer: Queue<Vector2>;
-};
-
-export type Room = {
-  id: string;
-  members: Member[];
-  directoryTree: DirectoryTree;
-};
-
-enum RoomMessage {
-  MOUSE_POSITION = "mousePosition",
-  KEYS_PRESSED = "keysPressed",
-  FILE_CREATED = "fileCreated",
-  FILE_SELECTED = "folderCreated",
-  FOLDER_CREATED = "folderCreated",
-  DIRECTORY_SELECTED = "directorySelected",
-}

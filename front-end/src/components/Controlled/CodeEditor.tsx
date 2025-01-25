@@ -1,9 +1,9 @@
 import { useContext, useEffect, useRef, useState } from "react";
-import { Vector2 } from "../../common/Interpolater";
-import { FileNode } from "../../utils/directoryTree";
+import { FileNode } from "../../assets/directoryTree";
 import { CodeEditorContext } from "../Managers/CodeEditorManager";
 import Cursor from "../Cursor";
 import Icon from "../../common/Icon";
+import { Vector2 } from "../../assets/types/messageTypes";
 
 const keysToIgnore = [
   "Insert",

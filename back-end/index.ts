@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import cors from "cors";
 import express from "express";
-import eventHandlers from "./eventHandlers/eventHandlers";
+import eventHandlers from "./eventHandlers/eventsHandlers";
 const initializeServer = require("socket.io");
 
 config();

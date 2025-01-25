@@ -3,7 +3,7 @@ import DirectoryTree, {
   DirectoryNode,
   FileNode,
   FolderNode,
-} from "../../utils/directoryTree";
+} from "../../assets/directoryTree";
 import { ContextMenuContext } from "../ContextMenuWrapper";
 import Icon from "../../common/Icon";
 
