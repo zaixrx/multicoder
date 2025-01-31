@@ -1,4 +1,4 @@
-import { Vector2 } from "../common/Interpolater";
+import { Vector2 } from "../assets/types/messageTypes";
 
 type MouseCursorProps = {
   position: Vector2;

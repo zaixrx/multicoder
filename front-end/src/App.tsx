@@ -1,160 +1,283 @@
-import { useState, useEffect, useRef } from "react";
-import {
-  makeConnection,
-} from "./assets/socketEventHandler";
-import { Messages, Vector2 } from "./assets/types/messageTypes";
-import DirectoryTree, { FileNode, FolderNode } from "./assets/directoryTree";
-import { Client } from "./assets/types/socketTypes";
-import { Room } from "./assets/types/roomTypes";
+import { io, Socket } from "socket.io-client";
+import { useState, useEffect, useRef, createContext } from "react";
+
 import Queue from "./assets/queue";
+import { Member, Room } from "./assets/types/roomTypes";
+import { Client } from "./assets/types/socketTypes";
+import { CursorPosition, CursorSelection, Messages, Vector2 } from "./assets/types/messageTypes";
+import DirectoryTree, { FileNode, FolderNode } from "./assets/directoryTree";
 
 import ConnectionHub from "./components/ConnectionHub";
-import CodeEditorManager from "./components/Managers/CodeEditorManager";
-import FileManager from "./components/Managers/FileManager";
+import FileManager from "./components/managers/FileManager";
 import ContextMenuWrapper from "./components/ContextMenuWrapper";
-import "./design.css";
 
-export type RoomContextType = [
-  room: Room,
-  setRoom: React.Dispatch<React.SetStateAction<Room>>,
-  client: Client
-];
+import "./styles.css";
+import CodeEditor from "./components/controlled/CodeEditor";
+import { bundle } from "./assets/bundler";
+
+type UFT = {
+  interpretCode: () => void;
+  setFileContent: (path: string[], content: string[], sendUpdate?: boolean) => void;
+  setMemberCursor: (memberId: string, position: CursorPosition, selection: CursorSelection, sendUpdate?: boolean) => void;
+};
+export const UtilityFunctions = createContext<UFT>({} as UFT);
 
 export default function App() {
   const [client, setClient] = useState<Client | undefined>();
   const [room, setRoom] = useState<Room>({
     id: "",
     members: [],
+    currentMember: {} as Member,
     directoryTree: new DirectoryTree(),
   });
+  
+  const socketRef = useRef<Socket>();
   const resultFrameRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    const socket = makeConnection();
-    
-    socket.on("connect", () => {
-      socket.on(Messages.ROOM_JOIN_REQUEST, (clientWhoRequestedToJoinId: string) => {
-        alert(`client ${clientWhoRequestedToJoinId} requested to join you`);
-        socket.emit(Messages.ROOM_JOIN_RESPONSE, clientWhoRequestedToJoinId, true);
-      });
+    socketRef.current = io("ws://127.0.0.1:3000");
+    socketRef.current.on("connect", () => {
+      setClient(client => {
+        client = new Client(socketRef.current || { } as Socket, 0);
+        const socket = client.socket;
 
-      socket.on(Messages.ROOM_CREATED, (_room: Room) => {
-        _room.members.forEach((member) => {
-          member.mousePositionQueue = new Queue<Vector2>();
+        socket.on(Messages.ROOM_JOIN_REQUEST, (clientWhoRequestedToJoinId: string) => {
+          client.send(Messages.ROOM_JOIN_RESPONSE, clientWhoRequestedToJoinId, true);
         });
-        _room.directoryTree = new DirectoryTree();
-        setRoom(_room);
-      });
 
-      setClient(new Client(socket, 0));
+        socket.on(Messages.ROOM_CREATED, (room: Room) => {
+          room.members.forEach((member) => {
+            member.mousePositionQueue = new Queue<Vector2>();
+            if (member.id === client.id)
+              room.currentMember = member;
+          });
+          room.directoryTree = new DirectoryTree();
+          setRoom(room);
+        });
+
+        socket.on(Messages.FILE_CREATED, (createdFileName: string) => {
+          setRoom(room => {
+            appendFile(createdFileName, false, room);
+            
+            return room;
+          })
+        });
+
+        socket.on(Messages.FILE_SELECTED, (path: string[]) => {
+          selectFile(path, false);
+        });
+
+        socket.on(Messages.FOLDER_CREATED, (folderName: string) => {
+          setRoom(room => {
+            appendFolder(folderName, false, room);
+            
+            return room;
+          })
+        });
+
+        socket.on(Messages.FOLDER_SELECTED, (path: string[]) => {
+          selectFolder(path, false);
+        });
+
+        socket.on(Messages.FILE_CONTENT_CHANGED, (path: string[], content: string[]) => {
+          setFileContent(path, content, false);
+        });
+
+        socket.on(Messages.MEMBER_CURSOR_CHANGED, (memberId: string, position: CursorPosition, selection: CursorSelection) => {
+          setMemberCursor(memberId, position, selection, false);
+        });
+
+        socket.on(Messages.EXECUTE_CODE, () => {
+          interpretCode(false);
+        });
+
+        return client;
+      });
     });
   }, []);
 
-  function postDirectoryTreeChanges(
+  function postRoomChanges(
     message: Messages,
-    data: FileNode | FolderNode,
+    ...data: any[]
   ) {
-    client?.send(message, room.id, data);
+    client?.send(message, room.id, ...data);
   }
 
-  function setSelectedFile(
-    newFile: FileNode | ((previousSelectedFile: FileNode) => FileNode)
-  ) {
-    const _room = { ...room };
-    _room.directoryTree.selectedFile = typeof newFile === "function" ? newFile(
-      room.directoryTree.selectedFile
-    ) : newFile;
+  function setFileContent(path: string[], content: string[], sendUpdate = true) {
+    setRoom(prevRoom => {
+      const room = { ...prevRoom };
 
-    setRoom(_room);
-    postDirectoryTreeChanges(
-      Messages.FILE_SELECTED,
-      _room.directoryTree.selectedFile
-    );
+      let file = room.directoryTree.findNode(path);
+      if (! (file && file instanceof FileNode) ) return prevRoom;
+
+      file.content = [...content];
+
+      if (sendUpdate)
+        postRoomChanges(Messages.FILE_CONTENT_CHANGED, path, content);
+      
+      return room;
+    });
   }
 
-  function setSelectedDirectory(selectedDirectory: FolderNode) {
-    const _room = { ...room };
-    _room.directoryTree.selectedDirectory = selectedDirectory;
+  function setMemberCursor(memberId: string, position: CursorPosition, selection: CursorSelection, sendUpdate = true) {
+    setRoom(prevRoom => {
+      const room = { ...prevRoom };
 
-    setRoom(_room);
-    postDirectoryTreeChanges(
-      Messages.DIRECTORY_SELECTED,
-      selectedDirectory
-    );
+      const member = room.members.find(m => m.id === memberId);
+      if (!member) return prevRoom;
+
+      member.cursorPosition = position;
+      member.cursorSelection = selection;
+
+      if (sendUpdate)
+        postRoomChanges(Messages.MEMBER_CURSOR_CHANGED, memberId, position, selection);
+      
+      return room;
+    });
   }
 
-  function appendFile(fileName: string) {
-    const newRoom = { ...room };
-    const file = newRoom.directoryTree.appendFile(fileName);
-    setRoom(newRoom);
+  function selectFile(path: string[] | undefined, sendUpdate = true) {
+    setRoom(prevRoom => {
+      const room = {...prevRoom};
+      
+      if (path) {
+        const file = prevRoom.directoryTree.findNode(path);
+        if (!(file && file instanceof FileNode)) return prevRoom;
+        room.directoryTree.selectedFile = file;
+
+        room.members.forEach(m => {
+          m.cursorPosition = { line: 0, column: 0 };
+          m.cursorSelection = {
+            start: { line: 0, column: 0 },
+            end: { line: 0, column: 0 }
+          };
+        })
+      } else {
+        room.directoryTree.selectedFile = undefined;
+      }
+
+      if (sendUpdate)
+        postRoomChanges(
+          Messages.FILE_SELECTED,
+          path
+        );
     
-    postDirectoryTreeChanges(Messages.FILE_CREATED, file);
+      return room;
+    });
+  }
+
+  function selectFolder(path: string[] | undefined, sendUpdate = true) {
+    setRoom(prevRoom => {
+      const room = { ...prevRoom };
+      if (path) {
+        const folder = room.directoryTree.findNode(path);
+        if (! (folder && folder instanceof FolderNode) ) return prevRoom;
+        room.directoryTree.selectedFolder = folder;
+      } else {
+        room.directoryTree.selectedFolder = undefined;
+      }
+
+      if (sendUpdate)
+        postRoomChanges(
+          Messages.FOLDER_SELECTED,
+          path
+        );
+
+      return room;
+    });
+  }
+
+  function appendFile(fileName: string, sendUpdate = true, prevRoom = room): FileNode | undefined {
+    const room = { ...prevRoom };
+    const file = room.directoryTree.appendFileToSelectedDir(fileName);
+    setRoom(room);
+
+    if (sendUpdate)
+      postRoomChanges(Messages.FILE_CREATED, fileName);
+
     return file;
   }
 
-  function appendFolder(folderName: string) {
-    const newRoom = { ...room };
-    const folder = newRoom.directoryTree.appendFolder(folderName);
-    setRoom(newRoom);
+  function appendFolder(folderName: string, sendUpdate = true, prevRoom = room): FolderNode | undefined {
+    const room = { ...prevRoom };
+    const folder = room.directoryTree.appendFolderToSelectedDir(folderName);
+    setRoom(room);
 
-    postDirectoryTreeChanges(Messages.FOLDER_CREATED, folder);
+    if(sendUpdate)
+      postRoomChanges(Messages.FOLDER_CREATED, folderName);
+
     return folder;
   }
 
-  function interpretJSCode(fileContent: string[]) {
+  function interpretCode(sendUpdate = true) {
     if (!resultFrameRef.current) return;
 
-    const mergedFileContent = fileContent.join("");
-    resultFrameRef.current.srcdoc = `
-    <html>
-    <body>
-        <script>
-            try {
-                ${mergedFileContent}
-            } catch (error) {
-                document.body.innerHTML = '<pre>' + error.toString() + '</pre>';
-            }
-        <\/script>
-    </body>
-    </html>
-`;
+    const { current: resultFrame } = resultFrameRef;
+
+    setRoom(prevRoom => {
+      let bundledCode = "";
+      let errorMessage = "";
+
+      try {
+        bundledCode = bundle(prevRoom.directoryTree);
+      } catch (error: any) {
+        errorMessage = "BUNDLELING_ERROR: " + error.message;
+      }
+
+      resultFrame.srcdoc = `
+        <html>
+          <head></head>
+          <body>
+            <pre class="error" id="error">${errorMessage}</pre>
+            <script>
+              try {
+                ${bundledCode}
+              } catch (e) {
+                document.getElementById("error").innerHTML = "RUNTIME_ERROR: " + e.message;
+              }
+            </script>
+          </body>
+        </html>
+      `;
+
+      if (sendUpdate)
+        postRoomChanges(Messages.EXECUTE_CODE);
+
+      return prevRoom;
+    })
   }
 
   return client ? (
-    <main>
-      {room.id ? (
-        <div className="d-flex fill-screen-vertically">
-          <ContextMenuWrapper>
-            <FileManager
-              directoryTree={room.directoryTree}
-              appendFile={appendFile}
-              appendFolder={appendFolder}
-              setCurrentDirectory={setSelectedDirectory}
-              setSelectedFile={setSelectedFile}
-            />
-          </ContextMenuWrapper>
-          {room.directoryTree.selectedFile.indexes && (
-            <div className="flex-column">
-              <CodeEditorManager
-                interpretJSCode={interpretJSCode}
-                selectedFile={room.directoryTree.selectedFile}
-                setSelectedFile={setSelectedFile}
+    <UtilityFunctions.Provider value={{ setFileContent, setMemberCursor, interpretCode }}>
+      <main>
+        Client Id: <span className="user-select-all">{client.id}</span>
+        {room.id ? (
+          <div className="d-flex fill-screen-vertically">
+            <ContextMenuWrapper>
+              <FileManager
+                directoryTree={room.directoryTree}
+                appendFile={appendFile}
+                selectFile={selectFile}
+                appendFolder={appendFolder}
+                selectFolder={selectFolder}
               />
-              <iframe ref={resultFrameRef} />
-            </div>
-          )}
-        </div>
-      ) : (
-        <>
-          <span>Client Id: {client.id}</span>
+            </ContextMenuWrapper>
+            {room.directoryTree.selectedFile && 
+              <section className="flex-column">
+                <CodeEditor selectedFile={room.directoryTree.selectedFile} members={room.members} currentMember={room.currentMember} />
+                <iframe className="output-frame" ref={resultFrameRef}/>
+              </section>
+            }
+          </div>
+        ) : (
           <ConnectionHub
             onClientConnect={(clientToConnectToId: string) =>
               client.send(Messages.ROOM_JOIN_REQUEST, clientToConnectToId)
             }
           />
-        </>
-      )}
-    </main>
+        )}
+      </main>
+    </UtilityFunctions.Provider>
   ) : (
     "It looks like we are having trouble to establish a connection with you"
   );

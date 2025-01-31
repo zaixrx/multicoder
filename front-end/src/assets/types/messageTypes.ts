@@ -3,12 +3,13 @@ export enum Messages {
     ROOM_JOIN_RESPONSE = "roomJoinResponse",
     ROOM_JOIN_DECLINED = "roomJoinDecliened",
     ROOM_CREATED = "roomCreated",
-    MOUSE_POSITION = "mousePosition",
-    KEYS_PRESSED = "keysPressed",
     FILE_CREATED = "fileCreated",
-    FILE_SELECTED = "folderCreated",
+    FILE_SELECTED = "fileSelected",
     FOLDER_CREATED = "folderCreated",
-    DIRECTORY_SELECTED = "directorySelected",
+    FOLDER_SELECTED = "folderSelected",
+    FILE_CONTENT_CHANGED = "fileContentChanged",
+    MEMBER_CURSOR_CHANGED = "memberCursorChanged",
+    EXECUTE_CODE = "executeCode",
 };
 
 export type KeyPress = {
@@ -19,4 +20,25 @@ export type KeyPress = {
 export type Vector2 = {
     x: number;
     y: number;
-}
+};
+
+export type CursorPosition = {
+    line: number;
+    column: number;
+};
+
+export type CursorSelection = {
+    start: CursorPosition;
+    end: CursorPosition;
+};
+
+export type MouseClick = {
+    type: string;
+    position: Vector2;
+};
+
+export type Color = {
+    r: number;
+    g: number;
+    b: number;
+};

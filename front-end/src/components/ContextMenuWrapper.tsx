@@ -1,16 +1,16 @@
 import { createContext, useState } from "react";
-import { Vector2 } from "../common/Interpolater";
+import { Vector2 } from "../assets/types/messageTypes";
 
 export const ContextMenuContext = createContext<any>(null);
 
 function ContextMenuWrapper({ children, className, ...rest }: any) {
-  const [isVisible, setIsVisible] = useState<boolean>(false);
   const [items, setItems] = useState<any[]>([]);
+  const [isVisible, setIsVisible] = useState<boolean>(false);
   const [menuPosition, setMenuPosition] = useState<Vector2>({ x: 0, y: 0 });
 
   function showMenu(items: any[], position: Vector2) {
-    setIsVisible(true);
     setItems(items);
+    setIsVisible(true);
     setMenuPosition(position);
   }
 

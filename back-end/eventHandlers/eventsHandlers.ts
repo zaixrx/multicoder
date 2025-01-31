@@ -23,6 +23,43 @@ type UtilityFunctions = {
   kickClient: (client: Client) => void,
 };
 
+function getUtilityFunctions(io: Server, app: Appdata): UtilityFunctions {
+  return {
+    emitToEveryone: (message: string, ...data: any[]) => {
+      io.emit(message, ...data);
+    },
+    emitToClient: (id: string, message: Messages, ...data: any[]) => {
+      const client = app.clients.find(c => c.id === id);
+      if (!client) return;
+      
+      client.send(message, ...data);
+    },    
+    getRoom: (roomId: string): Room | undefined => (
+      app.rooms.find(r => r.id === roomId)
+    ),
+    getClient: (id: string): Client | undefined => (
+      app.clients.find(c => c.id === id)
+    ),
+    kickClient: (client: Client) => {
+      // TODO: you are probably not updating clients with this information
+      app.clients.splice(app.clients.indexOf(client), 1);
+
+      const roomsToDelete: number[] = [];
+
+      app.rooms.forEach((room: Room, index: number) => {
+        const member = room.members.find((m) => m.id === client.id);
+        if (member) room.members.splice(room.members.indexOf(member), 1);
+        
+        if (room.members.length === 0) roomsToDelete.push(index);
+      });
+
+      roomsToDelete.forEach((roomIndex) => {
+        app.rooms.splice(roomIndex, 1);
+      });
+    },
+  }
+}
+
 export default (io: Server) => {
   const handle: Handle = { app, uf: getUtilityFunctions(io, app) };
 
@@ -44,40 +81,3 @@ export default (io: Server) => {
     app.clients.push(client);
   });
 };
-
-function getUtilityFunctions(io: Server, app: Appdata): UtilityFunctions {
-  return {
-    emitToEveryone: (message: string, ...data: any[]) => {
-      io.emit(message, ...data);
-    },
-    emitToClient: (id: string, message: Messages, ...data: any[]) => {
-      const client = app.clients.find(c => c.id === id);
-      if (!client) return;
-      
-      client.send(message, ...data);
-    },    
-    getRoom: (roomId: string): Room | undefined => (
-      app.rooms.find(r => r.id === roomId)
-    ),
-    getClient: (id: string): Client | undefined => (
-      app.clients.find(c => c.id === id)
-    ),
-    kickClient: (client: Client) => {
-      // TODO: you are probably not updating clients with this information
-      app.clients.splice(client.index, 1);
-
-      const roomsToDelete: number[] = [];
-
-      app.rooms.forEach((room: Room, index: number) => {
-        const member = room.members.find((m) => m.id === client.id);
-        if (member) room.members.splice(room.members.indexOf(member), 1);
-        
-        if (room.members.length === 0) roomsToDelete.push(index);
-      });
-
-      roomsToDelete.forEach((roomIndex) => {
-        app.rooms.splice(roomIndex, 1);
-      });
-    },
-  }
-}

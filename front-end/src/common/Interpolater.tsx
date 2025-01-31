@@ -1,5 +1,5 @@
-import { Children, cloneElement, useEffect, useState } from "react";
 import Queue from "../assets/queue";
+import { Children, cloneElement, useEffect, useState } from "react";
 import { Vector2 } from "../assets/types/messageTypes";
 
 const animationTime = 0.1;

@@ -14,7 +14,12 @@ export class Client {
   }
 
   send(message: Messages, ...data: any[]) {
+    console.log("sending message", message, "to", this.id);
     this.socket.emit(message, ...data);
+  }
+
+  broadcast(message: Messages, ...data: any[]) {
+    this.socket.broadcast.emit(message, data);
   }
 }
 

@@ -1,99 +1,86 @@
-export type CursorPosition = {
-  line: number;
-  column: number;
-};
-
-export type CursorSelection = {
-  start?: CursorPosition;
-  end?: CursorPosition;
-};
-
-export type DirectoryNode = FolderNode | FileNode;
-
-class DirectoryTreeNode {
-  public name: string;
-  public parent: FolderNode | undefined;
-  public indexes: number[];
-
-  constructor(parent: FolderNode | undefined, name: string, indexs: number[]) {
-    this.name = name;
-    this.parent = parent;
-    this.indexes = indexs;
-  }
+export abstract class DirectoryTreeNode {
+  constructor(public parent: FolderNode | undefined, public name: string, public path: string[]) {}
 }
 
 export class FileNode extends DirectoryTreeNode {
-  public parent: FolderNode | undefined;
   public content: string[];
-  public cursorPosition: CursorPosition;
-  public cursorSelection: CursorSelection;
 
-  constructor(parent: FolderNode | undefined, name: string, index: number) {
-    super(parent, name, [...(parent?.indexes || []), index]);
-    this.parent = parent;
-    this.content = ["// write you code here"];
-    this.cursorPosition = { line: 0, column: 0 };
-    this.cursorSelection = {};
+  constructor(parent: FolderNode | undefined, name: string) {
+    super(parent, name, [...(parent?.path || []), name]);
+    this.content = [""];
   }
 }
 
+type Children = { 
+  [name: string]: DirectoryTreeNode
+};
+
 export class FolderNode extends DirectoryTreeNode {
-  public children: DirectoryNode[];
+  public children: Children;
 
-  constructor(parent: FolderNode | undefined, name: string, index: number) {
-    super(parent, name, [...(parent?.indexes || []), index]);
-    this.children = [];
+  constructor(parent: FolderNode | undefined, name: string) {
+    super(parent, name, [...(parent?.path || []), name]);
+    this.children = { };
   }
-
-  appendFile = (name: string): FileNode => {
-    const fileNode = new FileNode(this, name, this.children.length);
-    this.children.push(fileNode);
-    return fileNode;
-  };
-
-  appendFolder = (name: string): FolderNode => {
-    const folderNode = new FolderNode(this, name, this.children.length);
-    this.children.push(folderNode);
-    return folderNode;
-  };
 }
 
 class DirectoryTree {
-  public selectedFile: FileNode;
-  public children: DirectoryNode[];
-  public selectedDirectory: FolderNode | DirectoryTree;
+  public children: Children;
+  public entryFile: FileNode | undefined;
+  public selectedFile: FileNode | undefined;
+  public selectedFolder: FolderNode | undefined;
 
   constructor() {
-    this.children = [];
-    this.selectedDirectory = this;
-    this.selectedFile = {} as FileNode;
+    this.children = { };
   }
 
-  appendFile = (name: string): FileNode => {
-    const fileNode = new FileNode(undefined, name, this.children.length);
-    this.children.push(fileNode);
+  nodeExists = (container: FolderNode | DirectoryTree, name: string): boolean => {
+    for (const node in container.children) {
+      if (node === name) return true;
+    }
+
+    return false;
+  };
+
+  appendFileToSelectedDir = (name: string): FileNode | undefined => {
+    const selectedDirectory = this.selectedFolder || this;
+    const originalName = name; let i = 0;
+    while (this.nodeExists(selectedDirectory, name)) {
+      name = originalName + i++;
+    }
+
+
+    const fileNode = new FileNode(this.selectedFolder, name)
+    selectedDirectory.children[name] = fileNode;
+    if (!this.entryFile) this.entryFile = fileNode;
     return fileNode;
   };
 
-  appendFolder = (name: string): FolderNode => {
-    const folderNode = new FolderNode(undefined, name, this.children.length);
-    this.children.push(folderNode);
-    return folderNode;
+  appendFolderToSelectedDir = (name: string): FolderNode | undefined => {
+    const selectedDirectory = this.selectedFolder || this;
+    if (this.nodeExists(selectedDirectory, name)) return undefined;
+
+    selectedDirectory.children[name] = new FolderNode(this.selectedFolder, name);
+    return selectedDirectory.children[name] as FolderNode;
   };
 
-  findNode = (indexes: number[]): DirectoryNode | undefined => {
-    if (indexes.length === 1) return this.children[indexes[0]];
+  findNode = (path: string[]): DirectoryTreeNode | undefined => {
+    if (path.length === 0) return;
 
-    let currentDirectory: FolderNode = this.children[indexes[0]] as FolderNode;
-    for (let i = 1; i < indexes.length; i++) {
-      if (i + 1 === indexes.length)
-        return currentDirectory.children[indexes[i]];
-
-      currentDirectory = currentDirectory.children[indexes[i]] as FolderNode;
+    let curr: DirectoryTreeNode = this.children[path[0]], i = 1;
+    while (curr instanceof FolderNode && i < path.length) {
+      curr = curr.children[path[i++]];
     }
 
-    return undefined;
+    return curr;
   };
+}
+
+export function typeOfDirectoryNode(node: DirectoryTreeNode) {
+  if (node && typeof node === "object") {
+    if (node instanceof FolderNode) return FolderNode;
+    else if (node instanceof FileNode) return FileNode;
+  }
 }
 
 export default DirectoryTree;

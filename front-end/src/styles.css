@@ -1,5 +1,13 @@
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-Regular.woff2') format('woff2'),
+       url('/fonts/JetBrainsMono-Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 * {
-  font-family: "JetBrains Mono";
+  font-family: "JetBrains Mono", monospace;
 }
 
 main {
@@ -8,6 +16,7 @@ main {
 }
 
 .code-area {
+  position: relative;
   cursor: text;
 }
 
@@ -18,7 +27,7 @@ main {
 
 .cursor-bar {
   position: absolute;
-  border-left: 2px solid red;
+  border-left: 2px solid;
   height: 24px;
 }
 
@@ -37,14 +46,6 @@ main {
   width: 20px;
   height: 20px;
   background-color: blue;
-}
-
-.fill-screen-horizontally {
-  width: 100vw;
-}
-
-.fill-screen-vertically {
-  height: 100vh;
 }
 
 .selection {
@@ -71,6 +72,10 @@ main {
   background-color: #444;
 }
 
+.output-frame {
+  background-color: #e0e0e0;
+}
+
 .dir-tab {
   width: 200px;
 }
@@ -80,5 +85,9 @@ main {
 }
 
 .selected {
+  background-color: red;
+}
+
+.error {
   background-color: red;
 }
