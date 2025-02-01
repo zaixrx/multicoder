@@ -1,4 +1,4 @@
-import { Vector2 } from "../assets/types/messageTypes";
+import { Vector2 } from "../../assets/types/messageTypes";
 
 type MouseCursorProps = {
   position: Vector2;

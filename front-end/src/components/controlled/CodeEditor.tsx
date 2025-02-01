@@ -2,9 +2,16 @@ import { useContext, useEffect } from "react";
 import { UtilityFunctions } from "../../App";
 import { FileNode } from "../../assets/directoryTree";
 import { Member } from "../../assets/types/roomTypes";
-import { Color, CursorPosition, CursorSelection, Vector2 } from "../../assets/types/messageTypes";
+import {
+  Color,
+  CursorPosition,
+  CursorSelection,
+  Vector2,
+} from "../../assets/types/messageTypes";
 import Queue from "../../assets/queue";
-import Cursor from "../../common/Cusror";
+import Cursor from "../common/Cursor";
+import Selection from "../common/Selection";
+import { max, min } from "../../assets/utils";
 
 const keysToIgnore = [
   "Insert",
@@ -28,58 +35,79 @@ type Props = {
   selectedFile: FileNode;
   currentMember: Member;
   members: Member[];
-}
+};
 
-function max(x: number, y: number) {
-  return x >= y ? x : y;
-}
-
-function min(x: number, y: number) {
-  return x < y ? x : y;
-}
-
-function sumColors(...colors: Color[]): Color {
-  let result: Color = { r: 0, g: 0, b: 0 };
-
-  for (let i = 0; i < colors.length; i++) {
-    result.r += colors[i].r;
-    result.g += colors[i].g;
-    result.b += colors[i].b;
-  }
-
-  result.r /= colors.length;
-  result.g /= colors.length;
-  result.b /= colors.length;
-
-  return result;
-}
-
-function getColorString({ r, g, b }: Color) {
-  return `rgb(${r}, ${g}, ${b})`;
-}
+export type Chunk = {
+  text: string;
+  start: number;
+  end: number;
+  members: Member[];
+};
 
 function CodeEditor({ selectedFile, currentMember, members }: Props) {
   const Utility = useContext(UtilityFunctions);
   const { content, path } = selectedFile;
 
+  const getCharacterDimensions = (): Vector2 => {
+    // Yes this is AI generated, and I'm not gonna hide that
+    const pre = document.createElement("pre");
+    pre.style.position = "absolute";
+    pre.style.visibility = "hidden";
+    pre.style.fontFamily = "monospace"; // Match the font you're using
+    pre.style.fontSize = "16px"; // Match the font size you're using
+    pre.textContent = "M"; // Use any character; "M" is often a good choice for width
+    pre.classList.add("line");
+    document.body.appendChild(pre);
+    const rect = pre.getBoundingClientRect();
+    document.body.removeChild(pre);
+    return { x: rect.width, y: rect.height };
+  };
+
+  const dimensions = getCharacterDimensions();
+
   const initializeMember = (member: Member) => {
     member.cursorPosition = { line: 0, column: 0 };
-    member.cursorSelection = { start: member.cursorPosition, end: member.cursorPosition };
+    member.cursorSelection = {
+      start: member.cursorPosition,
+      end: member.cursorPosition,
+    };
     member.mousePositionQueue = new Queue<Vector2>();
   };
 
-  function isSelecting({ start, end }: CursorSelection) {
-    return start.line === end.line && start.column === end.column;
+  function isSelecting({ start, end }: CursorSelection): boolean {
+    return start.line !== end.line || start.column !== end.column;
+  }
+
+  function getOrderedSelection(selection: CursorSelection): CursorSelection {
+    const result: CursorSelection = { ...selection };
+
+    if (
+      result.end.line < result.start.line ||
+      (result.end.line === result.start.line &&
+        result.end.column < result.start.column)
+    ) {
+      const temp = { ...result.start };
+      result.start = { ...result.end };
+      result.end = { ...temp };
+    }
+
+    return result;
   }
 
   useEffect(() => {
     members.forEach(initializeMember);
   }, []);
 
-  const appendText = (text: string, position: CursorPosition, selection: CursorSelection, sendUpdate = true) => {
-    const { path, content } = { ...selectedFile }
+  const appendText = (
+    text: string,
+    position: CursorPosition,
+    selection: CursorSelection,
+    sendUpdate = true
+  ) => {
+    const { path, content } = { ...selectedFile };
     const line = content[position.line];
-    content[position.line] = line.slice(0, position.column) + text + line.slice(position.column);
+    content[position.line] =
+      line.slice(0, position.column) + text + line.slice(position.column);
 
     position.column += text.length;
     selection.start = { ...position };
@@ -88,45 +116,61 @@ function CodeEditor({ selectedFile, currentMember, members }: Props) {
     Utility.setFileContent(path, content, sendUpdate);
   };
 
-  const removeText = (position: CursorPosition, selection: CursorSelection, sendUpdate = true) => {
-    if (position.column) {
-      const line = content[position.line];
+  const removeText = (
+    position: CursorPosition,
+    cursorSelection: CursorSelection,
+    sendUpdate = true
+  ) => {
+    const selection = getOrderedSelection(cursorSelection);
 
-      if (isSelecting(selection)) {
-        content[position.line] = line.slice(0, position.column - 1) + line.slice(position.column);
+    if (isSelecting(selection)) {
+      content[selection.start.line] =
+        content[selection.start.line].slice(0, selection.start.column) +
+        content[selection.end.line].slice(selection.end.column);
+      content.splice(selection.start.line + 1, selection.end.line);
+      position.line = selection.start.line;
+      position.column = selection.start.column;
+    } else {
+      if (position.column) {
+        const line = content[position.line];
+        content[position.line] =
+          line.slice(0, position.column - 1) + line.slice(position.column);
         position.column = max(0, --position.column);
       } else {
-        content[selection.start.line] = content[selection.start.line].slice(0, selection.start.column) + content[selection.end.line].slice(selection.end.column);
-        content.splice(selection.start.line + 1, selection.end.line);
-        position.line = selection.start.line;
-        position.column = selection.start.column;
+        deleteLine(position.line, position, sendUpdate);
       }
-      
-      selection.start = { ...position };
-      selection.end = { ...position };
-
-      Utility.setFileContent(path, content, sendUpdate);
-    } else {
-      deleteLine(position.line, position, sendUpdate);
     }
+
+    cursorSelection.start = { ...position };
+    cursorSelection.end = { ...position };
+
+    Utility.setFileContent(path, content, sendUpdate);
   };
 
-  const addLine = (position: CursorPosition, selection: CursorSelection, sendUpdate = true) => {
+  const addLine = (
+    position: CursorPosition,
+    selection: CursorSelection,
+    sendUpdate = true
+  ) => {
     const { content, path } = selectedFile;
 
     const text = content[position.line].slice(position.column);
     content[position.line] = content[position.line].slice(0, position.column);
     content.splice(++position.line, 0, text);
-    
+
     position.column = 0;
-    selection.end = {...position};
-    selection.start = {...position};
+    selection.end = { ...position };
+    selection.start = { ...position };
 
     Utility.setFileContent(path, content, sendUpdate);
   };
 
-  const deleteLine = (line: number, position: CursorPosition, sendUpdate = true) => {
-    if (position.line <= 0) return position.line = 0;
+  const deleteLine = (
+    line: number,
+    position: CursorPosition,
+    sendUpdate = true
+  ) => {
+    if (position.line <= 0) return (position.line = 0);
 
     const { content, path } = selectedFile;
     content.splice(line, 1);
@@ -137,23 +181,44 @@ function CodeEditor({ selectedFile, currentMember, members }: Props) {
     Utility.setFileContent(path, content, sendUpdate);
   };
 
-  const handleTab = (position: CursorPosition, selection: CursorSelection, sendUpdate = true) => {
+  const handleTab = (
+    position: CursorPosition,
+    selection: CursorSelection,
+    sendUpdate = true
+  ) => {
     appendText("   ", position, selection, sendUpdate);
   };
 
-  const handleBackspace = (position: CursorPosition, selection: CursorSelection, sendUpdate = true) => {
+  const handleBackspace = (
+    position: CursorPosition,
+    selection: CursorSelection,
+    sendUpdate = true
+  ) => {
     removeText(position, selection, sendUpdate);
   };
 
-  const handleEnter = (position: CursorPosition, selection: CursorSelection, sendUpdate = true) => {
+  const handleEnter = (
+    position: CursorPosition,
+    selection: CursorSelection,
+    sendUpdate = true
+  ) => {
     addLine(position, selection, sendUpdate);
   };
 
-  const moveCursor = (position: CursorPosition, selection: CursorSelection, desiredPosition: CursorPosition, shift: boolean) => {
+  const moveCursor = (
+    position: CursorPosition,
+    selection: CursorSelection,
+    desiredPosition: CursorPosition,
+    shift: boolean
+  ) => {
     const { content } = selectedFile;
 
-    desiredPosition.line = max(0, min(desiredPosition.line, content.length - 1));
+    desiredPosition.line = max(
+      0,
+      min(desiredPosition.line, content.length - 1)
+    );
 
+    // TODO: Fix this mess
     if (desiredPosition.column < 0) {
       if (desiredPosition.line) {
         desiredPosition.line = max(0, desiredPosition.line - 1);
@@ -163,7 +228,10 @@ function CodeEditor({ selectedFile, currentMember, members }: Props) {
       }
     } else if (desiredPosition.column > content[desiredPosition.line].length) {
       if (desiredPosition.line < content.length - 1) {
-        desiredPosition.line = min(desiredPosition.line + 1, content.length - 1);
+        desiredPosition.line = min(
+          desiredPosition.line + 1,
+          content.length - 1
+        );
         desiredPosition.column = 0;
       } else {
         desiredPosition.column = content[desiredPosition.line].length;
@@ -171,19 +239,21 @@ function CodeEditor({ selectedFile, currentMember, members }: Props) {
     }
 
     position = desiredPosition;
-    if (shift) {
-      if (position.line < selection.start.line || (position.line === selection.start.line && position.column < selection.start.column)) {
-        selection.start = { ...position };
-      } else {
-        selection.end = { ...position };
-      }
-    } else {
-      selection.end = {...position};
-      selection.start = {...position};
-    }
-  }
 
-  const handleKeyDown = (member: Member, key: string, shift: boolean, sendUpdate = true) => {
+    if (shift) {
+      selection.end = { ...position };
+    } else {
+      selection.end = { ...position };
+      selection.start = { ...position };
+    }
+  };
+
+  const handleKeyDown = (
+    member: Member,
+    key: string,
+    shift: boolean,
+    sendUpdate = true
+  ) => {
     if (keysToIgnore.includes(key)) return;
 
     const { cursorPosition, cursorSelection } = member;
@@ -193,7 +263,7 @@ function CodeEditor({ selectedFile, currentMember, members }: Props) {
       case "Backspace":
         handleBackspace(cursorPosition, cursorSelection, sendUpdate);
         break;
-      
+
       case "Enter":
         handleEnter(cursorPosition, cursorSelection, sendUpdate);
         break;
@@ -212,126 +282,109 @@ function CodeEditor({ selectedFile, currentMember, members }: Props) {
         desiredPosition.line++;
         moveCursor(cursorPosition, cursorSelection, desiredPosition, shift);
         break;
-        
+
       case "ArrowUp":
         desiredPosition.line--;
+        moveCursor(cursorPosition, cursorSelection, desiredPosition, shift);
+        break;
+
+      case "End":
+        desiredPosition.column = content[cursorPosition.line].length;
+        moveCursor(cursorPosition, cursorSelection, desiredPosition, shift);
+        break;
+
+      case "Home":
+        desiredPosition.column = 0;
         moveCursor(cursorPosition, cursorSelection, desiredPosition, shift);
         break;
 
       case "Tab":
         handleTab(cursorPosition, cursorSelection, sendUpdate);
         break;
-      
+
       default:
         appendText(key, cursorPosition, cursorSelection, sendUpdate);
         break;
     }
 
-    Utility.setMemberCursor(member.id, cursorPosition, cursorSelection, sendUpdate);
+    Utility.setMemberCursor(
+      member.id,
+      cursorPosition,
+      cursorSelection,
+      sendUpdate
+    );
 
-    members.forEach(m => {
+    members.forEach((m) => {
       if (m.id === member.id) return;
       let update = false;
 
+      // TODO: Rework the system
       if (m.cursorPosition.line >= content.length) {
         m.cursorPosition.line = content.length - 1;
         update = true;
       }
-     
+
       if (m.cursorPosition.column >= content[m.cursorPosition.line].length) {
         m.cursorPosition.column = content[m.cursorPosition.line].length;
         update = true;
       }
 
       if (update)
-        Utility.setMemberCursor(m.id, m.cursorPosition, m.cursorSelection, sendUpdate);
+        Utility.setMemberCursor(
+          m.id,
+          m.cursorPosition,
+          m.cursorSelection,
+          sendUpdate
+        );
     });
-  }
+  };
 
-  const renderLine = (line: number): React.ReactNode => {
-    const lineMembers: { [member: string]: {start?: number, end?: number} } = {};
-    const breakpoints = new Set<number>([0, content[line].length]);
+  const renderSelection = (line: number): React.ReactNode => {
+    interface Selection {
+      color: Color;
+      selection: CursorSelection;
+    }
+
+    const selections: Selection[] = [];
 
     members.forEach((member) => {
-      const { cursorSelection: selection, id } = member;
-      if (selection.start === selection.end) return;
+      const { start, end } = getOrderedSelection(member.cursorSelection);
+      if (start.line === end.line && start.column === end.column) return;
 
-      lineMembers[id] = { };
-      
-      if (selection.start.line < line && line < selection.end.line) {
-        lineMembers[id] = {
-          start: 0,
-          end: content[line].length
-        };
+      const index = selections.length;
 
-        return;
+      selections.push({
+        selection: {
+          start: { line, column: 0 },
+          end: { line, column: 0 },
+        },
+        color: member.color,
+      });
+
+      if (start.line < line && line < end.line) {
+        selections[index].selection.end.column = content[line].length;
       }
 
-      if (selection.start.line === line) {
-        breakpoints.add(selection.start.column);
-        lineMembers[id].start = selection.start.column;
+      if (start.line === line) {
+        selections[index].selection.start.column = start.column;
+        selections[index].selection.end.column = content[line].length;
       }
 
-      if (selection.end.line === line) {
-        breakpoints.add(selection.end.column);
-        lineMembers[id].end = selection.end.column;
+      if (end.line === line) {
+        selections[index].selection.end.column = end.column;
       }
     });
 
-    const sortedPoints = [...breakpoints].sort((a, b) => a - b);
-
-    const chunks: { text: string, start: number, end: number, members: Member[] }[] = [];
-    for (let i = 0; i < sortedPoints.length - 1; i++) {
-      const chunkStart = sortedPoints[i];
-      const chunkEnd = sortedPoints[i + 1];
-
-      const chunkMembers = members.filter(({ cursorSelection: selection }) => {
-        const { start, end } = selection;
-
-        const a = start.line === line;
-        const aBb = start.line < line && line < end.line;
-        const b = end.line === line;
-        const c = start.column <= chunkStart;
-        const d = end.column >= chunkEnd;
-
-        return aBb || (a && b && c && d) || (a && !b && c) || (!a && b && d);
-      });
-      const chunkText = content[line].slice(chunkStart, chunkEnd);
-
-      chunks.push({
-        text: chunkText,
-        end: chunkEnd,
-        start: chunkStart,
-        members: chunkMembers
-      });
-    }
-
-    function getStyles(members: Member[])  {
-      if (!members.length) return { background: "transparent" };
-
-      const color = sumColors(...members.map((m) => m.color));
-
-      return {
-        background: getColorString(color)
-      };
-    }
-
-    return (
-      <pre key={line} className="line">
-        {
-          (() => {
-            return chunks.map(({ members, text }, i) => (
-              <span key={i} style={getStyles(members)}>{text}</span>
-            ));
-          })()
-        }
-      </pre>
-    );
+    return selections.map(({ selection, color }) => (
+      <Selection selection={selection} color={color} dimensions={dimensions} />
+    ));
   };
 
   return (
     <>
-      <button onClick={Utility.interpretCode}><img src="run.svg" alt="Run"/></button>
+      <button onClick={Utility.interpretCode}>
+        <img src="run.svg" alt="Run" />
+      </button>
       <section
         className="code-area w-100"
         tabIndex={0}
@@ -341,12 +394,24 @@ function CodeEditor({ selectedFile, currentMember, members }: Props) {
         }}
       >
         {members.map(({ id, color, cursorPosition }) => (
-          <Cursor key={id} color={color} position={cursorPosition}/>
+          <Cursor
+            key={id}
+            color={color}
+            dimensions={dimensions}
+            position={cursorPosition}
+          />
         ))}
-        {content.map((_, index) => renderLine(index))}
+        {content.map((line, index) => (
+          <>
+            {renderSelection(index)}
+            <pre key={index} className="line">
+              {line}
+            </pre>
+          </>
+        ))}
       </section>
     </>
-  )
+  );
 }
 
 export default CodeEditor;

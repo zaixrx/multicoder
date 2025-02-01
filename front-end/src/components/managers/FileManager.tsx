@@ -5,7 +5,7 @@ import DirectoryTree, {
   DirectoryTreeNode,
   typeOfDirectoryNode
 } from "../../assets/directoryTree";
-import Icon from "../../common/Icon";
+import Icon from "../common/Icon";
 
 type PropsType = {
   directoryTree: DirectoryTree;
