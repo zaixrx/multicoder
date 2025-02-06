@@ -1,19 +1,17 @@
-import Queue from "../queue";
 import DirectoryTree from "../directoryTree";
-import { Color, CursorPosition, CursorSelection, Vector2 } from "./messageTypes";
+import { Color, CursorPosition, CursorSelection } from "./messageTypes";
 
 export interface Member {
-    id: string;
-    isOwner: boolean,
-    cursorPosition: CursorPosition;
-    cursorSelection: CursorSelection;
-    mousePositionQueue: Queue<Vector2>;
-    color: Color;
-};
+  readonly id: string;
+  readonly isOwner: boolean;
+  readonly color: Color;
+  cursorPosition: CursorPosition;
+  cursorSelection: CursorSelection;
+}
 
 export interface Room {
-    id: string;
-    members: Member[];
-    currentMember: Member;
-    directoryTree: DirectoryTree;
-};
+  readonly id: string;
+  members: Member[];
+  currentMember: Member;
+  directoryTree: DirectoryTree;
+}

@@ -1,18 +1,29 @@
+import { Token } from "acorn";
+
 export abstract class DirectoryTreeNode {
-  constructor(public parent: FolderNode | undefined, public name: string, public path: string[]) {}
+  constructor(
+    public parent: FolderNode | undefined,
+    public name: string,
+    public path: string[]
+  ) {}
+}
+
+export interface Line {
+  content: string;
+  tokens: Token[];
 }
 
 export class FileNode extends DirectoryTreeNode {
-  public content: string[];
+  public lines: Line[];
 
   constructor(parent: FolderNode | undefined, name: string) {
     super(parent, name, [...(parent?.path || []), name]);
-    this.content = [""];
+    this.lines = [{ content: "", tokens: [] }];
   }
 }
 
-type Children = { 
-  [name: string]: DirectoryTreeNode
+type Children = {
+  [name: string]: DirectoryTreeNode;
 };
 
 export class FolderNode extends DirectoryTreeNode {
@@ -20,7 +31,7 @@ export class FolderNode extends DirectoryTreeNode {
 
   constructor(parent: FolderNode | undefined, name: string) {
     super(parent, name, [...(parent?.path || []), name]);
-    this.children = { };
+    this.children = {};
   }
 }
 
@@ -31,10 +42,13 @@ class DirectoryTree {
   public selectedFolder: FolderNode | undefined;
 
   constructor() {
-    this.children = { };
+    this.children = {};
   }
 
-  nodeExists = (container: FolderNode | DirectoryTree, name: string): boolean => {
+  nodeExists = (
+    container: FolderNode | DirectoryTree,
+    name: string
+  ): boolean => {
     for (const node in container.children) {
       if (node === name) return true;
     }
@@ -44,14 +58,15 @@ class DirectoryTree {
 
   appendFileToSelectedDir = (name: string): FileNode | undefined => {
     const selectedDirectory = this.selectedFolder || this;
-    const originalName = name; let i = 0;
+    const originalName = name;
+    let i = 0;
     while (this.nodeExists(selectedDirectory, name)) {
       name = originalName + i++;
     }
 
-    const fileNode = new FileNode(this.selectedFolder, name)
+    const fileNode = new FileNode(this.selectedFolder, name);
     selectedDirectory.children[name] = fileNode;
-    
+
     if (!this.entryFile) this.entryFile = fileNode;
     return fileNode;
   };
@@ -60,14 +75,18 @@ class DirectoryTree {
     const selectedDirectory = this.selectedFolder || this;
     if (this.nodeExists(selectedDirectory, name)) return undefined;
 
-    selectedDirectory.children[name] = new FolderNode(this.selectedFolder, name);
+    selectedDirectory.children[name] = new FolderNode(
+      this.selectedFolder,
+      name
+    );
     return selectedDirectory.children[name] as FolderNode;
   };
 
   findNode = (path: string[]): DirectoryTreeNode | undefined => {
     if (path.length === 0) return;
 
-    let curr: DirectoryTreeNode = this.children[path[0]], i = 1;
+    let curr: DirectoryTreeNode = this.children[path[0]],
+      i = 1;
     while (curr instanceof FolderNode && i < path.length) {
       curr = curr.children[path[i++]];
     }

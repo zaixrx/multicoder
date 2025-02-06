@@ -1,12 +1,12 @@
-import * as acorn from 'acorn';
-import { simple } from 'acorn-walk';
+import * as acorn from "acorn";
+import { simple } from "acorn-walk";
 import * as bable from "@babel/standalone";
 
-import DirectoryTree, { FileNode } from './directoryTree';
+import DirectoryTree, { FileNode } from "./directoryTree";
 
 interface Module {
   transpiledCode: string;
-};
+}
 
 type Modules = {
   [absolutePath: string]: Module;
@@ -16,13 +16,13 @@ type Modules = {
 function createModuleGraph(directoryTree: DirectoryTree): Modules {
   if (!directoryTree.entryFile) throw new Error("Entry file not specified");
 
-  const modules: Modules = { };
+  const modules: Modules = {};
 
   // Returns the paths pointing to the dependecy files pointed to by the user
   function getDependencies(code: string): string[] {
     const ast = acorn.parse(code, {
-      sourceType: 'module',
-      ecmaVersion: 'latest',
+      sourceType: "module",
+      ecmaVersion: "latest",
     });
 
     const dependencies: string[] = [];
@@ -38,16 +38,20 @@ function createModuleGraph(directoryTree: DirectoryTree): Modules {
 
   function traverse(filePath: string): void {
     const fileNode = directoryTree.findNode(filePath.split("/"));
-    if (!(fileNode && fileNode instanceof FileNode)) throw new Error("File doesn't exist");
+    if (!(fileNode && fileNode instanceof FileNode))
+      throw new Error("File doesn't exist");
 
-    const code = fileNode.content.join('\n');
+    const code = fileNode.lines.map((l) => l.content).join("\n");
     const dependencies = getDependencies(code);
 
-    const { code: transpiledCode } = bable.transform(code, { presets: ["env"] });
-    if (!transpiledCode) throw new Error(`Falied to transpile code for ${filePath}`);
+    const { code: transpiledCode } = bable.transform(code, {
+      presets: ["env"],
+    });
+    if (!transpiledCode)
+      throw new Error(`Falied to transpile code for ${filePath}`);
 
     modules[filePath] = {
-      transpiledCode
+      transpiledCode,
     };
 
     dependencies.forEach(traverse);
@@ -57,13 +61,13 @@ function createModuleGraph(directoryTree: DirectoryTree): Modules {
 
   return modules;
 }
-  
+
 // Function to bundle all modules into a single file
 export function bundle(directoryTree: DirectoryTree): string {
   const modules = createModuleGraph(directoryTree);
 
   let graph = "";
-  
+
   for (const path in modules) {
     const { transpiledCode } = modules[path];
 

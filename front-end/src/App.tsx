@@ -1,16 +1,18 @@
 import { io, Socket } from "socket.io-client";
 import { useState, useEffect, useRef, createContext } from "react";
 
-import Queue from "./assets/queue";
 import { Member, Room } from "./assets/types/roomTypes";
 import { Client } from "./assets/types/socketTypes";
 import {
   CursorPosition,
   CursorSelection,
   Messages,
-  Vector2,
 } from "./assets/types/messageTypes";
-import DirectoryTree, { FileNode, FolderNode } from "./assets/directoryTree";
+import DirectoryTree, {
+  FileNode,
+  FolderNode,
+  Line,
+} from "./assets/directoryTree";
 
 import ConnectionHub from "./components/ConnectionHub";
 import FileManager from "./components/managers/FileManager";
@@ -19,6 +21,7 @@ import ContextMenuWrapper from "./components/ContextMenuWrapper";
 import "./styles.css";
 import CodeEditor from "./components/controlled/CodeEditor";
 import { bundle } from "./assets/bundler";
+import { arrayCopy, tokenize } from "./assets/utils";
 
 type UFT = {
   interpretCode: () => void;
@@ -67,10 +70,9 @@ export default function App() {
         );
 
         socket.on(Messages.ROOM_CREATED, (room: Room) => {
-          room.members.forEach((member) => {
-            member.mousePositionQueue = new Queue<Vector2>();
-            if (member.id === client.id) room.currentMember = member;
-          });
+          room.currentMember =
+            room.members.find((m) => m.id === client.id) || ({} as Member);
+
           room.directoryTree = new DirectoryTree();
           setRoom(room);
         });
@@ -141,7 +143,22 @@ export default function App() {
       let file = room.directoryTree.findNode(path);
       if (!(file && file instanceof FileNode)) return prevRoom;
 
-      file.content = [...content];
+      const lines: Line[] = [];
+      for (let i = 0; i < content.length; i++) {
+        const c = content[i];
+
+        let line: Line =
+          c === file.lines[i]?.content
+            ? file.lines[i]
+            : {
+                content: c,
+                tokens: tokenize(c) || [],
+              };
+
+        lines.push(line);
+      }
+
+      file.lines = lines;
 
       if (sendUpdate)
         postRoomChanges(Messages.FILE_CONTENT_CHANGED, path, content);
@@ -260,6 +277,7 @@ export default function App() {
       try {
         bundledCode = bundle(prevRoom.directoryTree);
       } catch (error: any) {
+        console.error(error);
         errorMessage = "BUNDLELING_ERROR: " + error.message;
       }
 
@@ -285,29 +303,32 @@ export default function App() {
     });
   }
 
+  const { id, directoryTree, currentMember, members } = room;
+
   return client ? (
     <UtilityFunctions.Provider
       value={{ setFileContent, setMemberCursor, interpretCode }}
     >
       <main>
         Client Id: <span className="user-select-all">{client.id}</span>
-        {room.id ? (
+        {id ? (
           <div className="d-flex fill-screen-vertically">
             <ContextMenuWrapper>
               <FileManager
-                directoryTree={room.directoryTree}
+                directoryTree={directoryTree}
                 appendFile={appendFile}
                 selectFile={selectFile}
                 appendFolder={appendFolder}
                 selectFolder={selectFolder}
               />
             </ContextMenuWrapper>
-            {room.directoryTree.selectedFile && (
+            {directoryTree.selectedFile && (
               <section className="flex-column">
                 <CodeEditor
-                  selectedFile={room.directoryTree.selectedFile}
-                  members={room.members}
-                  currentMember={room.currentMember}
+                  members={[...members]}
+                  lines={arrayCopy<Line>(directoryTree.selectedFile.lines)}
+                  path={directoryTree.selectedFile.path}
+                  currentMember={{ ...currentMember }}
                 />
                 <iframe className="output-frame" ref={resultFrameRef} />
               </section>
