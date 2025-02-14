@@ -1,13 +1,10 @@
-import { Color, Vector2 } from "./types/messageTypes";
-import * as acorn from "acorn";
-
-export function max(x: number, y: number) {
-  return x >= y ? x : y;
-}
-
-export function min(x: number, y: number) {
-  return x < y ? x : y;
-}
+import { codeToTokens, ThemedToken } from "shiki";
+import {
+  Color,
+  CursorPosition,
+  CursorSelection,
+  Vector2,
+} from "./types/messageTypes";
 
 export function sumColors(...colors: Color[]): Color {
   let result: Color = { r: 0, g: 0, b: 0 };
@@ -27,26 +24,6 @@ export function sumColors(...colors: Color[]): Color {
 
 export function getColorString({ r, g, b }: Color) {
   return `rgb(${r}, ${g}, ${b})`;
-}
-
-export function tokenize(code: string): acorn.Token[] | undefined {
-  let tokens = [];
-  let tokenizer = acorn.tokenizer(code, { ecmaVersion: "latest" });
-
-  while (true) {
-    try {
-      let token = tokenizer.getToken();
-      if (token.type.label === "eof") break;
-      tokens.push(token);
-    } catch {
-      return undefined;
-    }
-  }
-
-  const message = "hello";
-  message.length;
-
-  return tokens;
 }
 
 export function clamp(val: number, min: number, max: number) {
@@ -71,6 +48,28 @@ export function getCharacterDimensions(): Vector2 {
   return { x: rect.width, y: rect.height };
 }
 
+export function getOrderedSelection(
+  selection: CursorSelection
+): CursorSelection {
+  const result: CursorSelection = { ...selection };
+
+  if (
+    result.end.line < result.start.line ||
+    (result.end.line === result.start.line &&
+      result.end.column < result.start.column)
+  ) {
+    const temp = { ...result.start };
+    result.start = { ...result.end };
+    result.end = { ...temp };
+  }
+
+  return result;
+}
+
+export function EqualPositions(a: CursorPosition, b: CursorPosition): boolean {
+  return a.line === b.line && a.column === b.column;
+}
+
 export function arrayCopy<T>(array: T[]): T[] {
   let arrayCopy: T[] = [];
 
@@ -79,4 +78,13 @@ export function arrayCopy<T>(array: T[]): T[] {
   }
 
   return arrayCopy;
+}
+
+export async function getTokens(code: string): Promise<ThemedToken[]> {
+  const { tokens } = await codeToTokens(code, {
+    lang: "javascript",
+    theme: "dracula",
+  });
+
+  return tokens[0];
 }

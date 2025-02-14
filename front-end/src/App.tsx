@@ -21,9 +21,9 @@ import ContextMenuWrapper from "./components/ContextMenuWrapper";
 import "./styles.css";
 import CodeEditor from "./components/controlled/CodeEditor";
 import { bundle } from "./assets/bundler";
-import { arrayCopy, tokenize } from "./assets/utils";
+import { arrayCopy, getTokens } from "./assets/utils";
 
-type UFT = {
+export interface UFT {
   interpretCode: () => void;
   setFileContent: (
     path: string[],
@@ -36,7 +36,7 @@ type UFT = {
     selection: CursorSelection,
     sendUpdate?: boolean
   ) => void;
-};
+}
 export const UtilityFunctions = createContext<UFT>({} as UFT);
 
 export default function App() {
@@ -50,6 +50,8 @@ export default function App() {
 
   const socketRef = useRef<Socket>();
   const resultFrameRef = useRef<HTMLIFrameElement>(null);
+
+  const { id, directoryTree, currentMember, members } = room;
 
   useEffect(() => {
     socketRef.current = io("ws://127.0.0.1:3000");
@@ -132,9 +134,26 @@ export default function App() {
     client?.send(message, room.id, ...data);
   }
 
+  const [linesToTokenize, setLinesToTokenize] = useState<number[]>([]);
+
+  useEffect(() => {
+    const _room = { ...room };
+    if (!(_room.directoryTree.selectedFile && linesToTokenize.length)) return;
+
+    (async () => {
+      for (let i = 0; i < linesToTokenize.length; i++) {
+        const line =
+          _room.directoryTree.selectedFile?.lines[linesToTokenize[i]];
+        if (line) line.tokens = await getTokens(line.content);
+      }
+
+      setLinesToTokenize([]);
+    })();
+  }, [linesToTokenize]);
+
   function setFileContent(
     path: string[],
-    content: string[],
+    linesContent: string[],
     sendUpdate = true
   ) {
     setRoom((prevRoom) => {
@@ -144,24 +163,25 @@ export default function App() {
       if (!(file && file instanceof FileNode)) return prevRoom;
 
       const lines: Line[] = [];
-      for (let i = 0; i < content.length; i++) {
-        const c = content[i];
+      for (let i = 0; i < linesContent.length; i++) {
+        const content = linesContent[i];
 
         let line: Line =
-          c === file.lines[i]?.content
+          content === file.lines[i]?.content
             ? file.lines[i]
             : {
-                content: c,
-                tokens: tokenize(c) || [],
+                content: content,
+                tokens: [],
               };
 
+        setLinesToTokenize((prevLines) => [...prevLines, i]);
         lines.push(line);
       }
 
       file.lines = lines;
 
       if (sendUpdate)
-        postRoomChanges(Messages.FILE_CONTENT_CHANGED, path, content);
+        postRoomChanges(Messages.FILE_CONTENT_CHANGED, path, linesContent);
 
       return room;
     });
@@ -302,8 +322,6 @@ export default function App() {
       return prevRoom;
     });
   }
-
-  const { id, directoryTree, currentMember, members } = room;
 
   return client ? (
     <UtilityFunctions.Provider

@@ -1,4 +1,4 @@
-import { Token } from "acorn";
+import { ThemedToken } from "shiki";
 
 export abstract class DirectoryTreeNode {
   constructor(
@@ -10,7 +10,7 @@ export abstract class DirectoryTreeNode {
 
 export interface Line {
   content: string;
-  tokens: Token[];
+  tokens: ThemedToken[];
 }
 
 export class FileNode extends DirectoryTreeNode {
