@@ -1,4 +1,3 @@
-import { Line } from "../../../assets/directoryTree";
 import { Member } from "../../../assets/types/roomTypes";
 import {
   Color,
@@ -10,7 +9,7 @@ import Selection from "../../common/Selection";
 
 export function useEditorRendering(
   members: Member[],
-  lines: Line[],
+  lines: string[],
   characterDimensions: Vector2
 ) {
   function renderSelection(line: number) {
@@ -35,13 +34,13 @@ export function useEditorRendering(
       const selection = selections[index].selection;
 
       if (start.line < line && line < end.line) {
-        selection.end.column = lines[line].content.length;
+        selection.end.column = lines[line].length;
         return;
       }
 
       if (start.line === line) {
         selection.start.column = start.column;
-        selection.end.column = lines[line].content.length;
+        selection.end.column = lines[line].length;
       }
 
       if (end.line === line) {

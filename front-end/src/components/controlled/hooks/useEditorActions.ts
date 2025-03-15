@@ -1,16 +1,11 @@
 import { clamp, max } from "lodash";
-import { Line } from "../../../assets/directoryTree";
 import {
   CursorPosition,
   CursorSelection,
   Vector2,
 } from "../../../assets/types/messageTypes";
 import { Member } from "../../../assets/types/roomTypes";
-import {
-  EqualPositions,
-  getOrderedSelection,
-  getTokens,
-} from "../../../assets/utils";
+import { getOrderedSelection } from "../../../assets/utils";
 import { UFT } from "../../../App";
 
 function isSelecting({ start, end }: CursorSelection): boolean {
@@ -42,26 +37,22 @@ interface State {
   shift: boolean;
 }
 
-export function useEditorActions(
-  Utility: UFT,
-  members: Member[],
-  path: string[],
-  lines: Line[]
-) {
+export function useEditorActions(Utility: UFT, path: string[], lines: string[]) {
   function getMaxCol(lineIndex: number) {
-    return lines[lineIndex].content.length;
+    return lines[lineIndex].length;
   }
 
   const appendText = (
     text: string,
-    { cursorSelection: selection, cursorPosition: position }: State
+    {
+      cursorSelection: selection,
+      cursorPosition: position,
+    }: State
   ) => {
-    const line = lines[position.line];
-
-    line.content =
-      line.content.slice(0, position.column) +
+    lines[position.line] =
+      lines[position.line].slice(0, position.column) +
       text +
-      line.content.slice(position.column);
+      lines[position.line].slice(position.column);
 
     position.column += text.length;
     selection.start = { ...position };
@@ -75,9 +66,9 @@ export function useEditorActions(
     if (isSelecting(selection)) {
       const { start, end } = getOrderedSelection(selection);
 
-      lines[start.line].content =
-        lines[start.line].content.slice(0, start.column) +
-        lines[end.line].content.slice(end.column);
+      lines[start.line] =
+        lines[start.line].slice(0, start.column) +
+        lines[end.line].slice(end.column);
 
       if (start.line !== end.line) lines.splice(start.line + 1, end.line);
 
@@ -87,9 +78,9 @@ export function useEditorActions(
       if (position.column === 0) {
         deleteLine(position.line, position);
       } else {
-        lines[position.line].content =
-          lines[position.line].content.slice(0, position.column - 1) +
-          lines[position.line].content.slice(position.column);
+        lines[position.line] =
+          lines[position.line].slice(0, position.column - 1) +
+          lines[position.line].slice(position.column);
 
         position.column = max([0, --position.column]) || 0;
       }
@@ -103,11 +94,9 @@ export function useEditorActions(
     cursorPosition: position,
     cursorSelection: selection,
   }: State) => {
-    const line = lines[position.line];
-
-    const text = line.content.slice(position.column);
-    line.content = line.content.slice(0, position.column);
-    lines.splice(++position.line, 0, { content: text, tokens: [] });
+    const text = lines[position.line].slice(position.column);
+    lines[position.line] = lines[position.line].slice(0, position.column);
+    lines.splice(++position.line, 0, text);
 
     position.column = 0;
     selection.end = { ...position };
@@ -138,7 +127,7 @@ export function useEditorActions(
     let { line, column } = position;
 
     if (control) {
-      const { content } = lines[line];
+      const content = lines[line];
 
       if (direction.x > 0) {
         while (content[column] === " " && column < content.length) {
@@ -187,14 +176,14 @@ export function useEditorActions(
   ) => {
     if (keysToIgnore.includes(key)) return;
 
+    const { cursorSelection: selection, cursorPosition: position } = member;
     const state: State = {
-      cursorSelection: member.cursorSelection,
-      cursorPosition: member.cursorPosition,
+      cursorSelection: selection,
+      cursorPosition: position,
       control,
       shift,
     };
 
-    const { cursorSelection, cursorPosition } = state;
     let direction: Vector2 = { x: 0, y: 0 };
 
     switch (key) {
@@ -207,37 +196,37 @@ export function useEditorActions(
         break;
 
       case "ArrowLeft":
-        cursorPosition.column--;
+        position.column--;
         direction.x--;
         fixPosition(state, direction);
         break;
 
       case "ArrowRight":
-        cursorPosition.column++;
+        position.column++;
         direction.x++;
         fixPosition(state, direction);
         break;
 
       case "ArrowDown":
-        cursorPosition.line++;
+        position.line++;
         direction.y++;
         fixPosition(state, direction);
         break;
 
       case "ArrowUp":
-        cursorPosition.line--;
+        position.line--;
         direction.y--;
         fixPosition(state, direction);
         break;
 
       case "End":
-        cursorPosition.column = getMaxCol(cursorPosition.line);
+        position.column = getMaxCol(position.line);
         direction.x++;
         fixPosition(state, direction);
         break;
 
       case "Home":
-        cursorPosition.column = 0;
+        position.column = 0;
         direction.x--;
         fixPosition(state, direction);
         break;
@@ -250,17 +239,10 @@ export function useEditorActions(
         appendText(key, state);
         break;
     }
+    
+    Utility.setFileContent(path, member.id, lines, position, selection, true);
 
-    lines[cursorPosition.line].tokens = await getTokens(
-      lines[cursorPosition.line].content
-    );
-
-    Utility.setFileContent(
-      path,
-      lines.map((l) => l.content)
-    );
-    Utility.setMemberCursor(member.id, cursorPosition, cursorSelection);
-
+    /* do this server side
     members.map((m) => {
       if (member.id === m.id) return;
 
@@ -286,6 +268,7 @@ export function useEditorActions(
       )
         Utility.setMemberCursor(m.id, position, selection);
     });
+    */
   };
 
   return { handleKeyDown };

@@ -1,11 +1,12 @@
-import { useContext } from "react";
-import { ContextMenuContext } from "../ContextMenuWrapper";
+import { Separator } from "@radix-ui/react-separator";
 import DirectoryTree, {
-  FileNode, FolderNode,
+  FileNode,
+  FolderNode,
   DirectoryTreeNode,
-  typeOfDirectoryNode
+  typeOfDirectoryNode,
 } from "../../assets/directoryTree";
 import Icon from "../common/Icon";
+import { Button } from "../ui/button";
 
 type PropsType = {
   directoryTree: DirectoryTree;
@@ -22,33 +23,12 @@ function FileManager({
   selectFile,
   selectFolder,
 }: PropsType) {
-  const [showMenu, hideMenu] = useContext(ContextMenuContext);
-
   function createFileInCurrentDirectory(name: string) {
     appendFile(name);
-    hideMenu();
   }
 
   function createFolderInCurrentDirectory(name: string) {
     appendFolder(name);
-    hideMenu();
-  }
-
-  function handleContextMenuTrigger(
-    e: React.MouseEvent<HTMLDivElement, MouseEvent>
-  ) {
-    e.preventDefault();
-    showMenu(
-      [
-        <span onClick={() => createFileInCurrentDirectory("file")}>
-          Create File
-        </span>,
-        <span onClick={() => createFolderInCurrentDirectory("folder")}>
-          Create Folder
-        </span>,
-      ],
-      { x: e.clientX, y: e.clientY }
-    );
   }
 
   function selectDirectoryNode(directoryNode: DirectoryTreeNode) {
@@ -68,7 +48,7 @@ function FileManager({
     const container = directoryTree.selectedFolder || directoryTree;
 
     for (const node in container.children) {
-      nodes.push(container.children[node])
+      nodes.push(container.children[node]);
     }
 
     return nodes.map((node, index) => {
@@ -77,37 +57,34 @@ function FileManager({
           key={index}
           name={node.name}
           type={typeOfDirectoryNode(node)}
-          
           selected={directoryTree.selectedFile?.path === node.path}
           onClick={() => selectDirectoryNode(node)}
         />
       );
-    })
+    });
   }
 
   return (
-    <div
-      className="fill-vertically fill-screen-vertically dir-tab"
-      onContextMenu={handleContextMenuTrigger}
-    >
-      <section className="d-flex gap-1 px-1 align-items-center justify-content-end">
-        <button onClick={() => createFileInCurrentDirectory("file.js")}>
-          <Icon name="new-file.svg" width={20} />
-        </button>
+    <div className="h-100 w-[200px] p-2">
+      <section className="flex gap-1 items-center justify-start">
+        <Button onClick={() => createFileInCurrentDirectory("file.js")}>
+          <Icon name="new-file.svg" />
+        </Button>
 
-        <button onClick={() => createFolderInCurrentDirectory("folder")}>
-          <Icon name="new-folder.svg" width={20} />
-        </button>
+        <Button onClick={() => createFolderInCurrentDirectory("folder")}>
+          <Icon name="new-folder.svg" />
+        </Button>
       </section>
+
+      <Separator className="my-2" />
 
       {directoryTree.selectedFolder && (
         <div
-          className="d-flex gap-2 px-2 clickable border-bottom border-2"
+          className="flex gap-2 px-2 border-b-1"
           onClick={() => {
             if (directoryTree.selectedFolder?.parent)
               selectFolder(directoryTree.selectedFolder.parent.path);
-            else
-              selectFolder(undefined);
+            else selectFolder(undefined);
           }}
         >
           <Icon name="ellipsis.svg" />
@@ -120,25 +97,26 @@ function FileManager({
   );
 }
 
-
 function DirectoryNodeWrapper({ selected, type, name, onClick }: any) {
   return (
     <div
-      className={`d-flex border-2 border-bottom px-2 gap-2 clickable${
-        selected ? " selected" : ""
+      className={`cursor-pointer flex border-[#222] py-1 border-b-1 px-2 gap-2 cursor-pointer ${
+        selected ? "text-gray-200" : "text-gray-400"
       }`}
       onClick={onClick}
     >
-      <Icon name={() => {
-        switch (type) {
-          case FolderNode:
-            return "/folder.svg";
-          case FileNode:
-            return "/json.svg";
-          default:
-            return "/";
-        }
-      }} />
+      <Icon
+        name={(() => {
+          switch (type) {
+            case FolderNode:
+              return "/folder.svg";
+            case FileNode:
+              return "/json.svg";
+            default:
+              return "/";
+          }
+        })()}
+      />
       <span>{name}</span>
     </div>
   );

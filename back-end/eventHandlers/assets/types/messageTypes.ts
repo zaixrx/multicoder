@@ -1,44 +1,43 @@
 export enum Messages {
-    ROOM_JOIN_REQUEST = "roomJoinRequest",
-    ROOM_JOIN_RESPONSE = "roomJoinResponse",
-    ROOM_JOIN_DECLINED = "roomJoinDecliened",
-    ROOM_CREATED = "roomCreated",
-    FILE_CREATED = "fileCreated",
-    FILE_SELECTED = "fileSelected",
-    FOLDER_CREATED = "folderCreated",
-    FOLDER_SELECTED = "folderSelected",
-    FILE_CONTENT_CHANGED = "fileContentChanged",
-    MEMBER_CURSOR_CHANGED = "memberCursorChanged",
-    EXECUTE_CODE = "executeCode",
-};
+  ROOM_JOIN_REQUEST = "roomJoinRequest",
+  ROOM_JOIN_RESPONSE = "roomJoinResponse",
+  ROOM_JOIN_DECLINED = "roomJoinDecliened",
+  ROOM_CREATED = "roomCreated",
+  FILE_CREATED = "fileCreated",
+  FILE_SELECTED = "fileSelected",
+  FOLDER_CREATED = "folderCreated",
+  FOLDER_SELECTED = "folderSelected",
+  FILE_CONTENT_CHANGED = "fileContentChanged",
+  EXECUTE_CODE = "executeCode",
+}
 
 export type KeyPress = {
-    key: string;
-    shift: boolean;
+  key: string;
+  shift: boolean;
 };
 
 export type Vector2 = {
-    x: number;
-    y: number;
+  x: number;
+  y: number;
 };
 
 export type CursorPosition = {
-    line: number;
-    column: number;
+  line: number;
+  column: number;
 };
 
 export type CursorSelection = {
-    start: CursorPosition;
-    end: CursorPosition;
+  start: CursorPosition;
+  end: CursorPosition;
 };
 
 export type MouseClick = {
-    type: string;
-    position: Vector2;
+  type: string;
+  position: Vector2;
 };
 
 export type Color = {
-    r: number;
-    g: number;
-    b: number;
+  r: number;
+  g: number;
+  b: number;
 };

@@ -16,7 +16,6 @@ import DirectoryTree, {
 
 import ConnectionHub from "./components/ConnectionHub";
 import FileManager from "./components/managers/FileManager";
-import ContextMenuWrapper from "./components/ContextMenuWrapper";
 
 import "./styles.css";
 import CodeEditor from "./components/controlled/CodeEditor";
@@ -27,11 +26,8 @@ export interface UFT {
   interpretCode: () => void;
   setFileContent: (
     path: string[],
-    content: string[],
-    sendUpdate?: boolean
-  ) => void;
-  setMemberCursor: (
     memberId: string,
+    lines: string[],
     position: CursorPosition,
     selection: CursorSelection,
     sendUpdate?: boolean
@@ -105,19 +101,21 @@ export default function App() {
 
         socket.on(
           Messages.FILE_CONTENT_CHANGED,
-          (path: string[], content: string[]) => {
-            setFileContent(path, content, false);
-          }
-        );
-
-        socket.on(
-          Messages.MEMBER_CURSOR_CHANGED,
-          (
+          async (
+            path: string[],
             memberId: string,
+            fileContent: string[],
             position: CursorPosition,
             selection: CursorSelection
           ) => {
-            setMemberCursor(memberId, position, selection, false);
+            setFileContent(
+              path,
+              memberId,
+              fileContent,
+              position,
+              selection,
+              false
+            );
           }
         );
 
@@ -134,78 +132,42 @@ export default function App() {
     client?.send(message, room.id, ...data);
   }
 
-  const [linesToTokenize, setLinesToTokenize] = useState<number[]>([]);
-
-  useEffect(() => {
-    const _room = { ...room };
-    if (!(_room.directoryTree.selectedFile && linesToTokenize.length)) return;
-
-    (async () => {
-      for (let i = 0; i < linesToTokenize.length; i++) {
-        const line =
-          _room.directoryTree.selectedFile?.lines[linesToTokenize[i]];
-        if (line) line.tokens = await getTokens(line.content);
-      }
-
-      setLinesToTokenize([]);
-    })();
-  }, [linesToTokenize]);
-
-  function setFileContent(
+  async function setFileContent(
     path: string[],
-    linesContent: string[],
-    sendUpdate = true
-  ) {
-    setRoom((prevRoom) => {
-      const room = { ...prevRoom };
-
-      let file = room.directoryTree.findNode(path);
-      if (!(file && file instanceof FileNode)) return prevRoom;
-
-      const lines: Line[] = [];
-      for (let i = 0; i < linesContent.length; i++) {
-        const content = linesContent[i];
-
-        let line: Line =
-          content === file.lines[i]?.content
-            ? file.lines[i]
-            : {
-                content: content,
-                tokens: [],
-              };
-
-        setLinesToTokenize((prevLines) => [...prevLines, i]);
-        lines.push(line);
-      }
-
-      file.lines = lines;
-
-      if (sendUpdate)
-        postRoomChanges(Messages.FILE_CONTENT_CHANGED, path, linesContent);
-
-      return room;
-    });
-  }
-
-  function setMemberCursor(
     memberId: string,
+    fileContent: string[],
     position: CursorPosition,
     selection: CursorSelection,
-    sendUpdate = true
+    sendUpdate?: boolean
   ) {
+    const lines: Line[] = [];
+    for (let i = 0; i < fileContent.length; i++) {
+      lines.push({
+        content: fileContent[i],
+        tokens: await getTokens(fileContent[i]),
+      });
+    }
+
     setRoom((prevRoom) => {
       const room = { ...prevRoom };
 
       const member = room.members.find((m) => m.id === memberId);
       if (!member) return prevRoom;
 
+      let file = room.directoryTree.findNode(path);
+      if (!(file && file instanceof FileNode)) return prevRoom;
+
       member.cursorPosition = position;
       member.cursorSelection = selection;
 
+      file.lines = lines;
+
       if (sendUpdate)
         postRoomChanges(
-          Messages.MEMBER_CURSOR_CHANGED,
+          Messages.FILE_CONTENT_CHANGED,
+          path,
           memberId,
+          fileContent,
           position,
           selection
         );
@@ -324,22 +286,17 @@ export default function App() {
   }
 
   return client ? (
-    <UtilityFunctions.Provider
-      value={{ setFileContent, setMemberCursor, interpretCode }}
-    >
-      <main>
-        Client Id: <span className="user-select-all">{client.id}</span>
+    <UtilityFunctions.Provider value={{ setFileContent, interpretCode }}>
+      <main className="h-screen bg-[#070708] text-white p-2">
         {id ? (
-          <div className="d-flex fill-screen-vertically">
-            <ContextMenuWrapper>
-              <FileManager
-                directoryTree={directoryTree}
-                appendFile={appendFile}
-                selectFile={selectFile}
-                appendFolder={appendFolder}
-                selectFolder={selectFolder}
-              />
-            </ContextMenuWrapper>
+          <div className="h-100 flex gap-2">
+            <FileManager
+              directoryTree={directoryTree}
+              appendFile={appendFile}
+              selectFile={selectFile}
+              appendFolder={appendFolder}
+              selectFolder={selectFolder}
+            />
             {directoryTree.selectedFile && (
               <section className="flex-column">
                 <CodeEditor
@@ -353,11 +310,14 @@ export default function App() {
             )}
           </div>
         ) : (
-          <ConnectionHub
-            onClientConnect={(clientToConnectToId: string) =>
-              client.send(Messages.ROOM_JOIN_REQUEST, clientToConnectToId)
-            }
-          />
+          <div className="h-100 flex items-center justify-center">
+            <ConnectionHub
+              clientId={client.id}
+              onClientConnect={(clientToConnectToId: string) =>
+                client.send(Messages.ROOM_JOIN_REQUEST, clientToConnectToId)
+              }
+            />
+          </div>
         )}
       </main>
     </UtilityFunctions.Provider>

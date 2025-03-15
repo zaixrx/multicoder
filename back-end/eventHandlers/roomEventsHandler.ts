@@ -5,11 +5,8 @@ import DirectoryTree, { FileNode, FolderNode } from "./assets/directoryTree";
 import {
   CursorPosition,
   CursorSelection,
-  KeyPress,
   Messages,
-  Vector2,
 } from "./assets/types/messageTypes";
-import Queue from "./assets/queue";
 
 const communication = (handle: Handle, client: Client): EventHandler => ({
   [Messages.ROOM_JOIN_REQUEST]: roomJoinRequestHandler(handle, client),
@@ -22,7 +19,6 @@ const communication = (handle: Handle, client: Client): EventHandler => ({
   [Messages.FOLDER_CREATED]: folderCreatedHandler(handle, client),
   [Messages.FOLDER_SELECTED]: folderSelectedHandler(handle, client),
 
-  [Messages.MEMBER_CURSOR_CHANGED]: memberCursorChangedHandler(handle, client),
   [Messages.EXECUTE_CODE]: executeCodeHandler(handle, client),
 });
 
@@ -119,20 +115,41 @@ const fileSelectedHandler =
 
 const fileContentChanged =
   (handle: Handle, client: Client) =>
-  (roomId: string, path: string[], content: string[]) => {
+  (
+    roomId: string,
+    path: string[],
+    memberId: string,
+    lineIndex: number,
+    content: string,
+    position: CursorPosition,
+    selection: CursorSelection
+  ) => {
     const room = handle.uf.getRoom(roomId);
     if (!room) return;
 
     const file = room.directoryTree.findNode(path);
-    if (!(content && file && file instanceof FileNode)) return;
+    if (!(file && file instanceof FileNode)) return;
 
-    file.content = content;
+    const member = room.members.find((m) => m.id === memberId);
+    if (!member) return;
+
+    file.content[lineIndex] = content;
+    member.cursorPosition = position;
+    member.cursorSelection = selection;
 
     room.members.forEach((m: Member) => {
       if (m.id === client.id) return;
 
       const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(Messages.FILE_CONTENT_CHANGED, path, content);
+      memberClient?.send(
+        Messages.FILE_CONTENT_CHANGED,
+        path,
+        memberId,
+        lineIndex,
+        content,
+        position,
+        selection
+      );
     });
   };
 
@@ -170,36 +187,6 @@ const folderSelectedHandler =
 
       const memberClient = handle.uf.getClient(m.id);
       memberClient?.send(Messages.FOLDER_SELECTED, path);
-    });
-  };
-
-const memberCursorChangedHandler =
-  (handle: Handle, client: Client) =>
-  (
-    roomId: string,
-    memberId: string,
-    position: CursorPosition,
-    selection: CursorSelection
-  ) => {
-    const room = handle.uf.getRoom(roomId);
-    if (!room) return;
-
-    const member = room.members.find((m) => m.id === memberId);
-    if (!member) return;
-
-    member.cursorPosition = position;
-    member.cursorSelection = selection;
-
-    room.members.forEach((m: Member) => {
-      if (m.id === client.id) return;
-
-      const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(
-        Messages.MEMBER_CURSOR_CHANGED,
-        memberId,
-        position,
-        selection
-      );
     });
   };
 
