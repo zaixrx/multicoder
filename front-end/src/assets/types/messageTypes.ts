@@ -7,7 +7,8 @@ export enum Messages {
   FILE_SELECTED = "fileSelected",
   FOLDER_CREATED = "folderCreated",
   FOLDER_SELECTED = "folderSelected",
-  FILE_CONTENT_CHANGED = "fileContentChanged",
+  NODE_NAME_CHANGED = "nodeNameChanged",
+  FILE_MEMBER_CURSOR = "fileMemberCursor",
   EXECUTE_CODE = "executeCode",
 }
 

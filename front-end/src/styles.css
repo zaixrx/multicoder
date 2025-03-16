@@ -16,16 +16,6 @@
   font-family: "JetBrains Mono", monospace;
 }
 
-main {
-  width: 100vw;
-  height: 100vh;
-}
-
-.line-counter {
-  width: 42px;
-  background-color: grey;
-}
-
 .cursor-bar {
   position: absolute;
   border-left: 2px solid;
@@ -36,10 +26,6 @@ main {
   margin: 0;
   font-size: 16px;
   height: 24px;
-}
-
-.dir-tab {
-  width: 200px;
 }
 
 :root {

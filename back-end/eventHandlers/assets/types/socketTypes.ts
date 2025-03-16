@@ -1,33 +1,63 @@
 import { Socket } from "socket.io";
 import { Room } from "./roomTypes";
 import { Messages } from "./messageTypes";
+import { ObjectId } from "bson";
 
 export class Client {
-  index: number;
-  socket: Socket;
-  id: string;
+  public id: string;
+  public socket: Socket;
+  private _joinedRoom: string;
 
-  constructor(socket: Socket, index: number) {
-    this.index = index;
+  constructor(socket: Socket) {
     this.socket = socket;
-    this.id = socket.id.replace('-', '');
+    this.id = socket.id.replace("-", "");
+    this._joinedRoom = "";
+  }
+
+  public get joinedRoom() {
+    return this._joinedRoom;
+  }
+
+  public set joinedRoom(roomId: string) {
+    if (ObjectId.isValid(roomId)) {
+      this._joinedRoom = roomId;
+    }
   }
 
   send(message: Messages, ...data: any[]) {
-    console.log("sending message", message, "to", this.id);
     this.socket.emit(message, ...data);
   }
 
+  sendAll(message: Messages, ...data: any[]) {
+    if (this._joinedRoom) this.socket.emit(message, ...data);
+  }
+
   broadcast(message: Messages, ...data: any[]) {
-    this.socket.broadcast.emit(message, data);
+    if (this._joinedRoom)
+      this.socket.broadcast.to(this._joinedRoom).emit(message, data);
   }
 }
 
 export type EventHandler = {
-  [key: string]: (...params: any) => void;
+  [key: string]: {
+    eventHandler: (req: Request) => void;
+    middlewares: ((handle: Handle, req: Request) => void)[];
+  };
 };
 
 export type Appdata = {
-  clients: Client[];
-  rooms: Room[];
+  clients: Map<string, Client>;
+  rooms: Map<string, Room>;
 };
+
+export interface Handle {
+  app: Appdata;
+}
+
+export interface Request {
+  params: any[];
+  status: number;
+  state: {
+    [key: string]: any;
+  };
+}

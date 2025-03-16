@@ -59,10 +59,13 @@ class DirectoryTree {
   appendFileToSelectedDir = (name: string): FileNode | undefined => {
     const selectedDirectory = this.selectedFolder || this;
     const originalName = name;
+
     let i = 0;
-    while (this.nodeExists(selectedDirectory, name)) {
-      name = originalName + i++;
+    while (this.nodeExists(selectedDirectory, name + ".js")) {
+      name = `${originalName}(${i++})`;
     }
+
+    name += ".js";
 
     const fileNode = new FileNode(this.selectedFolder, name);
     selectedDirectory.children[name] = fileNode;

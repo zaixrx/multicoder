@@ -7,6 +7,7 @@ import { getCharacterDimensions } from "../../assets/utils";
 import { useEditorActions } from "./hooks/useEditorActions";
 import { useEditorRendering } from "./hooks/useEditorRendering";
 import { Button } from "../ui/button";
+import Icon from "../common/Icon";
 
 interface Props {
   currentMember: Member;
@@ -38,19 +39,13 @@ function CodeEditor({ lines, path, currentMember, members }: Props) {
     members.forEach(initializeMember);
   }, []);
 
-  const linesContent = lines.map((l) => l.content);
-
-  const { handleKeyDown } = useEditorActions(Utility, path, linesContent);
-  const { renderSelection } = useEditorRendering(
-    members,
-    linesContent,
-    dimensions
-  );
+  const { handleKeyDown } = useEditorActions(Utility, path, lines);
+  const { renderSelection } = useEditorRendering(members, lines, dimensions);
 
   return (
     <div className="py-2">
       <Button onClick={Utility.interpretCode}>
-        <img src="run.svg" alt="Run" />
+        <Icon name="run.svg" />
       </Button>
       <div className="flex my-2">
         <div className="w-[50px] bg-[#111]">
@@ -86,11 +81,15 @@ function CodeEditor({ lines, path, currentMember, members }: Props) {
             <Fragment key={lineIndex}>
               {renderSelection(lineIndex)}
               <pre className="line">
-                {line.tokens.map((token) => {
-                  return (
-                    <span style={{ color: token.color }}>{token.content}</span>
-                  );
-                })}
+                {line.tokens.length
+                  ? line.tokens.map((token) => {
+                      return (
+                        <span style={{ color: token.color }}>
+                          {token.content}
+                        </span>
+                      );
+                    })
+                  : line.content}
               </pre>
             </Fragment>
           ))}
@@ -99,5 +98,7 @@ function CodeEditor({ lines, path, currentMember, members }: Props) {
     </div>
   );
 }
+
+// Only tokenize the edited part
 
 export default CodeEditor;

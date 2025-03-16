@@ -1,4 +1,5 @@
-import { Separator } from "@radix-ui/react-separator";
+import _ from "lodash";
+
 import DirectoryTree, {
   FileNode,
   FolderNode,
@@ -7,6 +8,9 @@ import DirectoryTree, {
 } from "../../assets/directoryTree";
 import Icon from "../common/Icon";
 import { Button } from "../ui/button";
+import { useState } from "react";
+import { Input } from "../ui/input";
+import { Separator } from "@radix-ui/react-separator";
 
 type PropsType = {
   directoryTree: DirectoryTree;
@@ -14,6 +18,11 @@ type PropsType = {
   appendFolder: (folderName: string) => FolderNode | undefined;
   selectFile: (path: string[] | undefined) => void;
   selectFolder: (path: string[] | undefined) => void;
+  changeFileName: (
+    nodePath: string[],
+    newName: string,
+    sendUpdate?: boolean
+  ) => void;
 };
 
 function FileManager({
@@ -22,6 +31,7 @@ function FileManager({
   appendFolder,
   selectFile,
   selectFolder,
+  changeFileName,
 }: PropsType) {
   function createFileInCurrentDirectory(name: string) {
     appendFile(name);
@@ -59,6 +69,10 @@ function FileManager({
           type={typeOfDirectoryNode(node)}
           selected={directoryTree.selectedFile?.path === node.path}
           onClick={() => selectDirectoryNode(node)}
+          onSetName={(name: string) => {
+            changeFileName(node.path, name, true);
+            node.name = name;
+          }}
         />
       );
     });
@@ -67,7 +81,7 @@ function FileManager({
   return (
     <div className="h-100 w-[200px] p-2">
       <section className="flex gap-1 items-center justify-start">
-        <Button onClick={() => createFileInCurrentDirectory("file.js")}>
+        <Button onClick={() => createFileInCurrentDirectory("file")}>
           <Icon name="new-file.svg" />
         </Button>
 
@@ -80,7 +94,7 @@ function FileManager({
 
       {directoryTree.selectedFolder && (
         <div
-          className="flex gap-2 px-2 border-b-1"
+          className="cursor-pointer flex border-[#222] py-1 border-b-1 px-2 gap-2"
           onClick={() => {
             if (directoryTree.selectedFolder?.parent)
               selectFolder(directoryTree.selectedFolder.parent.path);
@@ -97,13 +111,22 @@ function FileManager({
   );
 }
 
-function DirectoryNodeWrapper({ selected, type, name, onClick }: any) {
+function DirectoryNodeWrapper({
+  selected,
+  type,
+  name,
+  onClick,
+  onSetName,
+}: any) {
+  const [editMode, setEditMode] = useState<boolean>(true);
+  const [editName, setEditName] = useState<string>("");
+
   return (
     <div
-      className={`cursor-pointer flex border-[#222] py-1 border-b-1 px-2 gap-2 cursor-pointer ${
+      className={`cursor-pointer flex border-[#222] py-1 border-b-1 px-2 gap-2 ${
         selected ? "text-gray-200" : "text-gray-400"
       }`}
-      onClick={onClick}
+      onClick={() => !editMode && onClick()}
     >
       <Icon
         name={(() => {
@@ -117,7 +140,24 @@ function DirectoryNodeWrapper({ selected, type, name, onClick }: any) {
           }
         })()}
       />
-      <span>{name}</span>
+      {editMode ? (
+        <Input
+          value={editName}
+          placeholder={name}
+          onChange={(e) => {
+            setEditName(e.target.value);
+          }}
+          onKeyDown={({ key }) => {
+            if (key === "Enter") {
+              if (editName) onSetName(editName);
+              setEditMode(false);
+              setEditName("");
+            }
+          }}
+        />
+      ) : (
+        <span>{name}</span>
+      )}
     </div>
   );
 }

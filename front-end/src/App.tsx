@@ -50,7 +50,7 @@ export default function App() {
   const { id, directoryTree, currentMember, members } = room;
 
   useEffect(() => {
-    socketRef.current = io("ws://127.0.0.1:3000");
+    socketRef.current = io(import.meta.env.VITE_BACKEND_WSURL);
     socketRef.current.on("connect", () => {
       setClient((client) => {
         client = new Client(socketRef.current || ({} as Socket), 0);
@@ -101,7 +101,7 @@ export default function App() {
 
         socket.on(
           Messages.FILE_CONTENT_CHANGED,
-          async (
+          (
             path: string[],
             memberId: string,
             fileContent: string[],
@@ -123,6 +123,13 @@ export default function App() {
           interpretCode(false);
         });
 
+        socket.on(
+          Messages.NODE_NAME_CHANGED,
+          (nodePath: string[], newName: string) => {
+            changeFileName(nodePath, newName, false);
+          }
+        );
+
         return client;
       });
     });
@@ -140,6 +147,33 @@ export default function App() {
     selection: CursorSelection,
     sendUpdate?: boolean
   ) {
+    setRoom((prevRoom) => {
+      const room = { ...prevRoom };
+
+      const member = room.members.find((m) => m.id === memberId);
+      if (!member) return prevRoom;
+
+      let file = room.directoryTree.findNode(path);
+      if (!(file && file instanceof FileNode)) return prevRoom;
+
+      member.cursorPosition = position;
+      member.cursorSelection = selection;
+
+      file.lines = fileContent.map((content) => ({ content, tokens: [] }));
+
+      if (sendUpdate)
+        postRoomChanges(
+          Messages.FILE_CONTENT_CHANGED,
+          path,
+          memberId,
+          fileContent,
+          position,
+          selection
+        );
+
+      return room;
+    });
+
     const lines: Line[] = [];
     for (let i = 0; i < fileContent.length; i++) {
       lines.push({
@@ -157,17 +191,36 @@ export default function App() {
       let file = room.directoryTree.findNode(path);
       if (!(file && file instanceof FileNode)) return prevRoom;
 
+      file.lines = lines;
+
+      return room;
+    });
+  }
+
+  function setMemberCursorOnFile(
+    path: string[],
+    memberId: string,
+    position: CursorPosition,
+    selection: CursorSelection,
+    sendUpdate?: boolean
+  ) {
+    setRoom((prevRoom) => {
+      const room = { ...prevRoom };
+
+      const member = room.members.find((m) => m.id === memberId);
+      if (!member) return prevRoom;
+
+      let file = room.directoryTree.findNode(path);
+      if (!(file && file instanceof FileNode)) return prevRoom;
+
       member.cursorPosition = position;
       member.cursorSelection = selection;
 
-      file.lines = lines;
-
       if (sendUpdate)
         postRoomChanges(
-          Messages.FILE_CONTENT_CHANGED,
+          Messages.FILE_MEMBER_CURSOR,
           path,
           memberId,
-          fileContent,
           position,
           selection
         );
@@ -233,6 +286,26 @@ export default function App() {
     return file;
   }
 
+  function changeFileName(
+    nodePath: string[],
+    newName: string,
+    sendUpdate: boolean = true
+  ) {
+    if (!newName) return;
+
+    setRoom((prevRoom) => {
+      const room = { ...prevRoom };
+
+      const node = room.directoryTree.findNode(nodePath);
+      if (!node) return room;
+
+      node.name = newName;
+      if (sendUpdate) postRoomChanges(Messages.NODE_NAME_CHANGED);
+
+      return room;
+    });
+  }
+
   function appendFolder(
     folderName: string,
     sendUpdate = true,
@@ -265,9 +338,20 @@ export default function App() {
 
       resultFrame.srcdoc = `
         <html>
-          <head></head>
+          <head>
+            <style>
+              .error {
+                overflow:hidden;
+                border-width: 2px;
+                border-color: red;
+                color: #fff;
+                padding: 1rem;
+                background-color: rgba(255, 0, 0, 0.6);
+              }
+            </style>
+          </head>
           <body>
-            <pre class="error" id="error">${errorMessage}</pre>
+            <div class="error" id="error">${errorMessage}</div>
             <script>
               try {
                 ${bundledCode}
@@ -296,6 +380,7 @@ export default function App() {
               selectFile={selectFile}
               appendFolder={appendFolder}
               selectFolder={selectFolder}
+              changeFileName={changeFileName}
             />
             {directoryTree.selectedFile && (
               <section className="flex-column">

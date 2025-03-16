@@ -3,14 +3,14 @@ import { Color, CursorPosition, CursorSelection } from "./messageTypes";
 
 export interface Member {
   readonly id: string;
-  readonly isOwner: boolean;
   readonly color: Color;
+  readonly isOwner: boolean;
   cursorPosition: CursorPosition;
   cursorSelection: CursorSelection;
 }
 
 export interface Room {
   readonly id: string;
-  members: Member[];
+  members: Map<string, Member>;
   directoryTree: DirectoryTree;
 }

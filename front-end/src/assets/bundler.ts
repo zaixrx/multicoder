@@ -20,20 +20,24 @@ function createModuleGraph(directoryTree: DirectoryTree): Modules {
 
   // Returns the paths pointing to the dependecy files pointed to by the user
   function getDependencies(code: string): string[] {
-    const ast = acorn.parse(code, {
-      sourceType: "module",
-      ecmaVersion: "latest",
-    });
+    try {
+      const ast = acorn.parse(code, {
+        sourceType: "module",
+        ecmaVersion: "latest",
+      });
 
-    const dependencies: string[] = [];
-    simple(ast, {
-      ImportDeclaration(node: any) {
-        // TODO: Make sure the pathes stored here are absolute paths
-        dependencies.push(node.source.value);
-      },
-    });
+      const dependencies: string[] = [];
+      simple(ast, {
+        ImportDeclaration(node: any) {
+          // TODO: Make sure the pathes stored here are absolute paths
+          dependencies.push(node.source.value);
+        },
+      });
 
-    return dependencies;
+      return dependencies;
+    } catch {
+      return [];
+    }
   }
 
   function traverse(filePath: string): void {
@@ -43,6 +47,8 @@ function createModuleGraph(directoryTree: DirectoryTree): Modules {
 
     const code = fileNode.lines.map((l) => l.content).join("\n");
     const dependencies = getDependencies(code);
+
+    if (!dependencies) return;
 
     const { code: transpiledCode } = bable.transform(code, {
       presets: ["env"],

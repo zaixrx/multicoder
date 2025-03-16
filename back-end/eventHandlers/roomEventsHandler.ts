@@ -1,206 +1,176 @@
-import { Client, EventHandler } from "./assets/types/socketTypes";
-import { Handle } from "./eventsHandlers";
-import { Member, Room } from "./assets/types/roomTypes";
-import DirectoryTree, { FileNode, FolderNode } from "./assets/directoryTree";
 import {
-  CursorPosition,
-  CursorSelection,
-  Messages,
-} from "./assets/types/messageTypes";
+  Client,
+  EventHandler,
+  Handle,
+  Request,
+} from "./assets/types/socketTypes";
+import { Messages } from "./assets/types/messageTypes";
+import { Member, Room } from "./assets/types/roomTypes";
+import DirectoryTree from "./assets/directoryTree";
+import { ObjectId } from "bson";
+
+function roomMiddleware(handle: Handle, req: Request) {
+  const roomID: string = req.params[0];
+  const room: Room | undefined = handle.app.rooms.get(roomID);
+  if (!room) {
+    req.status = -1;
+    req.state.error = "Room Not Found";
+    return;
+  }
+
+  req.state.room = room;
+}
 
 const communication = (handle: Handle, client: Client): EventHandler => ({
-  [Messages.ROOM_JOIN_REQUEST]: roomJoinRequestHandler(handle, client),
-  [Messages.ROOM_JOIN_RESPONSE]: roomJoinResponseHandler(handle, client),
-
-  [Messages.FILE_CREATED]: fileCreatedHandler(handle, client),
-  [Messages.FILE_SELECTED]: fileSelectedHandler(handle, client),
-  [Messages.FILE_CONTENT_CHANGED]: fileContentChanged(handle, client),
-
-  [Messages.FOLDER_CREATED]: folderCreatedHandler(handle, client),
-  [Messages.FOLDER_SELECTED]: folderSelectedHandler(handle, client),
-
-  [Messages.EXECUTE_CODE]: executeCodeHandler(handle, client),
+  [Messages.ROOM_CREATED]: {
+    eventHandler: roomCreatedHandler(handle, client),
+    middlewares: [],
+  },
+  [Messages.ROOM_JOINED]: {
+    eventHandler: roomJoinedHandler(handle, client),
+    middlewares: [roomMiddleware],
+  },
+  [Messages.FILE_CREATED]: {
+    eventHandler: fileCreatedHandler(handle, client),
+    middlewares: [],
+  },
+  [Messages.FILE_SELECTED]: {
+    eventHandler: fileSelectedHandler(handle, client),
+    middlewares: [],
+  },
+  [Messages.FOLDER_CREATED]: {
+    eventHandler: folderCreatedHandler(handle, client),
+    middlewares: [],
+  },
+  [Messages.FOLDER_SELECTED]: {
+    eventHandler: folderSelectedHandler(handle, client),
+    middlewares: [],
+  },
+  [Messages.FILE_CONTENT_CHANGED]: {
+    eventHandler: fileContentChanged(handle, client),
+    middlewares: [],
+  },
+  [Messages.NODE_NAME_CHANGED]: {
+    eventHandler: nodeNameChangedHandler(handle, client),
+    middlewares: [],
+  },
+  [Messages.EXECUTE_CODE]: {
+    eventHandler: executeCodeHandler(handle, client),
+    middlewares: [],
+  },
 });
 
-const roomJoinRequestHandler =
-  (handle: Handle, client: Client) => (clientToConnectToId: string) => {
-    handle.uf.emitToClient(
-      clientToConnectToId,
-      Messages.ROOM_JOIN_REQUEST,
-      client.id
-    );
+const roomCreatedHandler = (handle: Handle, client: Client) => (_: Request) => {
+  const room: Room = createRoom(handle, [client], client.id);
+  client.send(Messages.ROOM_CREATED, room);
+};
+
+const roomJoinedHandler = (_: Handle, client: Client) => (req: Request) => {
+  const room: Room = req.state.room;
+  joinRoom(room, [client], "");
+  client.send(Messages.ROOM_JOINED, room);
+};
+
+const fileCreatedHandler =
+  (handle: Handle, client: Client) => (req: Request) => {
+    const room: Room = req.state.room;
+    const [createdFileName] = req.params;
+
+    room.directoryTree.appendFileToSelectedDir(createdFileName);
+
+    client.broadcast(Messages.FILE_CREATED, createdFileName);
   };
 
-const roomJoinResponseHandler =
-  (handle: Handle, client: Client) =>
-  (clientWhoRequestedToJoinId: string, accpetedReqeust: boolean) => {
-    const clientWhoRequestedToJoin = handle.uf.getClient(
-      clientWhoRequestedToJoinId
-    );
-    if (!clientWhoRequestedToJoin) return;
+const fileSelectedHandler = (_: Handle, client: Client) => (req: Request) => {
+  const room = req.state.room;
+  const [path] = req.params;
 
-    if (accpetedReqeust) {
-      const clients = [client, clientWhoRequestedToJoin];
-      createRoom(handle, clients, client.id);
-    } else {
-      clientWhoRequestedToJoin.send(Messages.ROOM_JOIN_DECLINED, client.id);
-    }
+  room.directoryTree.selectedFile = path ? req.state.file : null;
+
+  client.broadcast(Messages.FILE_SELECTED, path);
+};
+
+const fileContentChanged = (_: Handle, client: Client) => (req: Request) => {
+  const { file, member } = req.state;
+  const [path, content, position, selection] = req.params;
+
+  file.content[position.line] = content;
+  member.cursorPosition = position;
+  member.cursorSelection = selection;
+
+  client.broadcast(
+    Messages.FILE_CONTENT_CHANGED,
+    path,
+    content,
+    position,
+    selection
+  );
+};
+
+const folderCreatedHandler = (_: Handle, client: Client) => (req: Request) => {
+  const room: Room = req.state.room;
+  const [createdFolderName] = req.params;
+
+  room.directoryTree.appendFolderToSelectedDir(createdFolderName);
+
+  client.broadcast(Messages.FOLDER_CREATED, createdFolderName);
+};
+
+const folderSelectedHandler = (_: Handle, client: Client) => (req: Request) => {
+  const room: Room = req.state.room;
+  const [path] = req.params;
+
+  room.directoryTree.selectedFolder = path ? req.state.folder : null;
+  client.broadcast(Messages.FOLDER_SELECTED, path);
+};
+
+const executeCodeHandler = (_: Handle, client: Client) => (req: Request) => {
+  client.broadcast(Messages.EXECUTE_CODE);
+};
+
+const nodeNameChangedHandler =
+  (_: Handle, client: Client) => (req: Request) => {
+    const { node } = req.state;
+    const [nodePath, newName] = req.params;
+
+    node.name = newName;
+
+    client.broadcast(Messages.NODE_NAME_CHANGED, nodePath, newName);
   };
 
-function createRoom(handle: Handle, clients: Client[], ownerId: string) {
-  const cursorDefault: CursorPosition = { line: 0, column: 0 };
+export default communication;
 
-  const o = Math.round,
-    r = Math.random,
-    s = 255;
-
+function createRoom(handle: Handle, clients: Client[], ownerId: string): Room {
   const room: Room = {
-    id: crypto.randomUUID(),
-    members: clients.map(
-      (c): Member => ({
-        id: c.id,
-        isOwner: c.id === ownerId,
-        cursorPosition: cursorDefault,
-        cursorSelection: { start: cursorDefault, end: cursorDefault },
-        color: { r: o(r() * s), g: o(r() * s), b: o(r() * s) },
-      })
-    ),
+    id: new ObjectId().toString(),
+    members: new Map<string, Member>(),
     directoryTree: new DirectoryTree(),
   };
 
-  clients.forEach((c) => {
-    c.send(Messages.ROOM_CREATED, room);
-  });
-  handle.app.rooms.push(room);
+  handle.app.rooms.set(room.id, room);
+  joinRoom(room, clients, ownerId);
 
   return room;
 }
 
-const fileCreatedHandler =
-  (handle: Handle, client: Client) =>
-  (roomId: string, createdFileName: string) => {
-    const room = handle.uf.getRoom(roomId);
-    if (!room) return;
+function joinRoom(room: Room, clients: Client[], ownerId: string) {
+  const o = Math.round,
+    r = Math.random,
+    s = 255;
 
-    room.directoryTree.appendFileToSelectedDir(createdFileName);
-    room.members.forEach((m: Member) => {
-      if (m.id === client.id) return;
-
-      const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(Messages.FILE_CREATED, createdFileName);
+  clients.forEach((client) => {
+    room.members.set(client.id, {
+      isOwner: ownerId ? ownerId === client.id : false,
+      id: client.id,
+      cursorPosition: { line: 0, column: 0 },
+      cursorSelection: {
+        start: { line: 0, column: 0 },
+        end: { line: 0, column: 0 },
+      },
+      color: { r: o(r() * s), g: o(r() * s), b: o(r() * s) },
     });
-  };
 
-const fileSelectedHandler =
-  (handle: Handle, client: Client) =>
-  (roomId: string, path: string[] | undefined) => {
-    const room = handle.uf.getRoom(roomId);
-    if (!room) return;
-
-    if (path) {
-      const file = room.directoryTree.findNode(path);
-      if (!(file && file instanceof FileNode)) return;
-      room.directoryTree.selectedFile = file;
-    } else {
-      room.directoryTree.selectedFile = undefined;
-    }
-
-    room.members.forEach((m: Member) => {
-      if (m.id === client.id) return;
-
-      const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(Messages.FILE_SELECTED, path);
-    });
-  };
-
-const fileContentChanged =
-  (handle: Handle, client: Client) =>
-  (
-    roomId: string,
-    path: string[],
-    memberId: string,
-    lineIndex: number,
-    content: string,
-    position: CursorPosition,
-    selection: CursorSelection
-  ) => {
-    const room = handle.uf.getRoom(roomId);
-    if (!room) return;
-
-    const file = room.directoryTree.findNode(path);
-    if (!(file && file instanceof FileNode)) return;
-
-    const member = room.members.find((m) => m.id === memberId);
-    if (!member) return;
-
-    file.content[lineIndex] = content;
-    member.cursorPosition = position;
-    member.cursorSelection = selection;
-
-    room.members.forEach((m: Member) => {
-      if (m.id === client.id) return;
-
-      const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(
-        Messages.FILE_CONTENT_CHANGED,
-        path,
-        memberId,
-        lineIndex,
-        content,
-        position,
-        selection
-      );
-    });
-  };
-
-const folderCreatedHandler =
-  (handle: Handle, client: Client) =>
-  (roomId: string, createdFolderName: string) => {
-    const room = handle.uf.getRoom(roomId);
-    if (!room) return;
-
-    room.directoryTree.appendFolderToSelectedDir(createdFolderName);
-    room.members.forEach((m: Member) => {
-      if (m.id === client.id) return;
-
-      const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(Messages.FOLDER_CREATED, createdFolderName);
-    });
-  };
-
-const folderSelectedHandler =
-  (handle: Handle, client: Client) =>
-  (roomId: string, path: string[] | undefined) => {
-    const room = handle.uf.getRoom(roomId);
-    if (!room) return;
-
-    if (path) {
-      const folder = room.directoryTree.findNode(path);
-      if (!(folder && folder instanceof FolderNode)) return;
-      room.directoryTree.selectedFolder = folder;
-    } else {
-      room.directoryTree.selectedFolder = undefined;
-    }
-
-    room.members.forEach((m: Member) => {
-      if (m.id === client.id) return;
-
-      const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(Messages.FOLDER_SELECTED, path);
-    });
-  };
-
-const executeCodeHandler =
-  (handle: Handle, client: Client) => (roomId: string) => {
-    const room = handle.uf.getRoom(roomId);
-    if (!room) return;
-
-    room.members.forEach((m: Member) => {
-      if (m.id === client.id) return;
-
-      const memberClient = handle.uf.getClient(m.id);
-      memberClient?.send(Messages.EXECUTE_CODE);
-    });
-  };
-
-export default communication;
+    client.joinedRoom = room.id;
+    client.socket.join(room.id);
+  });
+}

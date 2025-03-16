@@ -81,6 +81,8 @@ export function arrayCopy<T>(array: T[]): T[] {
 }
 
 export async function getTokens(code: string): Promise<ThemedToken[]> {
+  console.log("token");
+
   const { tokens } = await codeToTokens(code, {
     lang: "javascript",
     theme: "dracula",

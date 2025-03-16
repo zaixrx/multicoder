@@ -7,6 +7,7 @@ import {
 import { Member } from "../../../assets/types/roomTypes";
 import { getOrderedSelection } from "../../../assets/utils";
 import { UFT } from "../../../App";
+import { Line } from "@/assets/directoryTree";
 
 function isSelecting({ start, end }: CursorSelection): boolean {
   return start.line !== end.line || start.column !== end.column;
@@ -37,22 +38,19 @@ interface State {
   shift: boolean;
 }
 
-export function useEditorActions(Utility: UFT, path: string[], lines: string[]) {
+export function useEditorActions(Utility: UFT, path: string[], lines: Line[]) {
   function getMaxCol(lineIndex: number) {
-    return lines[lineIndex].length;
+    return lines[lineIndex].content.length;
   }
 
   const appendText = (
     text: string,
-    {
-      cursorSelection: selection,
-      cursorPosition: position,
-    }: State
+    { cursorSelection: selection, cursorPosition: position }: State
   ) => {
-    lines[position.line] =
-      lines[position.line].slice(0, position.column) +
+    lines[position.line].content =
+      lines[position.line].content.slice(0, position.column) +
       text +
-      lines[position.line].slice(position.column);
+      lines[position.line].content.slice(position.column);
 
     position.column += text.length;
     selection.start = { ...position };
@@ -66,21 +64,23 @@ export function useEditorActions(Utility: UFT, path: string[], lines: string[]) 
     if (isSelecting(selection)) {
       const { start, end } = getOrderedSelection(selection);
 
-      lines[start.line] =
-        lines[start.line].slice(0, start.column) +
-        lines[end.line].slice(end.column);
+      lines[start.line].content =
+        lines[start.line].content.slice(0, start.column) +
+        lines[end.line].content.slice(end.column);
 
       if (start.line !== end.line) lines.splice(start.line + 1, end.line);
 
       position.line = start.line;
       position.column = start.column;
     } else {
-      if (position.column === 0) {
+      if (position.column === 0 && position.line >= 1) {
+        const content = lines[position.line].content;
         deleteLine(position.line, position);
+        lines[position.line].content += content;
       } else {
-        lines[position.line] =
-          lines[position.line].slice(0, position.column - 1) +
-          lines[position.line].slice(position.column);
+        lines[position.line].content =
+          lines[position.line].content.slice(0, position.column - 1) +
+          lines[position.line].content.slice(position.column);
 
         position.column = max([0, --position.column]) || 0;
       }
@@ -94,9 +94,12 @@ export function useEditorActions(Utility: UFT, path: string[], lines: string[]) 
     cursorPosition: position,
     cursorSelection: selection,
   }: State) => {
-    const text = lines[position.line].slice(position.column);
-    lines[position.line] = lines[position.line].slice(0, position.column);
-    lines.splice(++position.line, 0, text);
+    const text = lines[position.line].content.slice(position.column);
+    lines[position.line].content = lines[position.line].content.slice(
+      0,
+      position.column
+    );
+    lines.splice(++position.line, 0, { content: text, tokens: [] });
 
     position.column = 0;
     selection.end = { ...position };
@@ -127,25 +130,20 @@ export function useEditorActions(Utility: UFT, path: string[], lines: string[]) 
     let { line, column } = position;
 
     if (control) {
-      const content = lines[line];
+      const { tokens } = lines[line];
 
-      if (direction.x > 0) {
-        while (content[column] === " " && column < content.length) {
-          column++;
-        }
+      for (let i = 0; i < tokens.length; i++) {
+        if (
+          0 <= column - tokens[i].offset &&
+          column - tokens[i].offset <= tokens[i].content.length
+        ) {
+          if (direction.x > 0) {
+            column = tokens[i].offset + tokens[i].content.length;
+          } else if (direction.x < 0) {
+            column = tokens[i].offset;
+          }
 
-        while (content[column] !== " " && column < content.length) {
-          ++column;
-        }
-      } else if (direction.x < 0) {
-        while (content[column] === " " && column > 0) {
-          --column;
-        }
-
-        while (content[column] !== " " && column > 0) {
-          if (column - 1 > 0 && content[column - 1] === " ") break;
-
-          --column;
+          break;
         }
       }
     }
@@ -239,8 +237,15 @@ export function useEditorActions(Utility: UFT, path: string[], lines: string[]) 
         appendText(key, state);
         break;
     }
-    
-    Utility.setFileContent(path, member.id, lines, position, selection, true);
+
+    Utility.setFileContent(
+      path,
+      member.id,
+      lines.map((l) => l.content),
+      position,
+      selection,
+      true
+    );
 
     /* do this server side
     members.map((m) => {
