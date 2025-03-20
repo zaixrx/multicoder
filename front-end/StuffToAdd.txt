@@ -1,0 +1,4 @@
+- (In the directory tree when you send a name let the server do the proccessing,
+then only work with what the server gave you back)
+
+- only send key presses then reconcile every once in a while

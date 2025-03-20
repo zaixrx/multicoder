@@ -20,13 +20,15 @@ import FileManager from "./components/managers/FileManager";
 import "./styles.css";
 import CodeEditor from "./components/controlled/CodeEditor";
 import { bundle } from "./assets/bundler";
-import { arrayCopy, getTokens } from "./assets/utils";
+import { getTokens } from "./assets/utils";
+import { Badge } from "./components/ui/badge";
+import { toast, Toaster } from "sonner";
 
 export interface UFT {
   interpretCode: () => void;
   setFileContent: (
-    path: string[],
     memberId: string,
+    path: string[],
     lines: string[],
     position: CursorPosition,
     selection: CursorSelection,
@@ -39,45 +41,60 @@ export default function App() {
   const [client, setClient] = useState<Client | undefined>();
   const [room, setRoom] = useState<Room>({
     id: "",
-    members: [],
     currentMember: {} as Member,
+    members: new Map<string, Member>(),
     directoryTree: new DirectoryTree(),
   });
 
   const socketRef = useRef<Socket>();
   const resultFrameRef = useRef<HTMLIFrameElement>(null);
 
-  const { id, directoryTree, currentMember, members } = room;
-
   useEffect(() => {
     socketRef.current = io(import.meta.env.VITE_BACKEND_WSURL);
     socketRef.current.on("connect", () => {
       setClient((client) => {
-        client = new Client(socketRef.current || ({} as Socket), 0);
-        const socket = client.socket;
+        const socket = socketRef.current || ({} as Socket);
+        client = new Client(socket);
+
+        socket.on(Messages.NEW_MEMBER, (member: Member) => {
+          setRoom((prevRoom) => {
+            const room = { ...prevRoom };
+
+            room.members.set(member.id, member);
+
+            return room;
+          });
+        });
 
         socket.on(
-          Messages.ROOM_JOIN_REQUEST,
-          (clientWhoRequestedToJoinId: string) => {
-            client.send(
-              Messages.ROOM_JOIN_RESPONSE,
-              clientWhoRequestedToJoinId,
-              true
-            );
+          Messages.ROOM_JOIN,
+          (
+            roomId: string,
+            roomMembers: Member[],
+            directoryTree: DirectoryTree
+          ) => {
+            console.log(directoryTree);
+
+            const room: Room = {
+              id: roomId,
+              currentMember: {} as Member,
+              members: new Map<string, Member>(
+                roomMembers.map((member) => [member.id, member])
+              ),
+              directoryTree: new DirectoryTree(),
+            };
+
+            const currentMember = room.members.get(client.id);
+            if (!currentMember) return;
+            room.currentMember = currentMember;
+
+            setRoom(room);
           }
         );
 
-        socket.on(Messages.ROOM_CREATED, (room: Room) => {
-          room.currentMember =
-            room.members.find((m) => m.id === client.id) || ({} as Member);
-
-          room.directoryTree = new DirectoryTree();
-          setRoom(room);
-        });
-
-        socket.on(Messages.FILE_CREATED, (createdFileName: string) => {
+        socket.on(Messages.FILE_CREATED, (path: string[]) => {
           setRoom((room) => {
-            appendFile(createdFileName, false, room);
+            appendFile(path, false, room);
 
             return room;
           });
@@ -87,9 +104,9 @@ export default function App() {
           selectFile(path, false);
         });
 
-        socket.on(Messages.FOLDER_CREATED, (folderName: string) => {
+        socket.on(Messages.FOLDER_CREATED, (path: string[]) => {
           setRoom((room) => {
-            appendFolder(folderName, false, room);
+            appendFolder(path, false, room);
 
             return room;
           });
@@ -102,15 +119,15 @@ export default function App() {
         socket.on(
           Messages.FILE_CONTENT_CHANGED,
           (
-            path: string[],
             memberId: string,
+            path: string[],
             fileContent: string[],
             position: CursorPosition,
             selection: CursorSelection
           ) => {
             setFileContent(
-              path,
               memberId,
+              path,
               fileContent,
               position,
               selection,
@@ -123,13 +140,15 @@ export default function App() {
           interpretCode(false);
         });
 
-        socket.on(
-          Messages.NODE_NAME_CHANGED,
-          (nodePath: string[], newName: string) => {
-            changeFileName(nodePath, newName, false);
-          }
-        );
+        socket.on(Messages.NODE_NAME_CHANGED, (path: string[]) => {
+          changeFileName(path, false);
+        });
 
+        socket.on(Messages.ERROR, (message) => {
+          toast("Error", {
+            description: message,
+          });
+        });
         return client;
       });
     });
@@ -140,8 +159,8 @@ export default function App() {
   }
 
   async function setFileContent(
-    path: string[],
     memberId: string,
+    path: string[],
     fileContent: string[],
     position: CursorPosition,
     selection: CursorSelection,
@@ -150,26 +169,32 @@ export default function App() {
     setRoom((prevRoom) => {
       const room = { ...prevRoom };
 
-      const member = room.members.find((m) => m.id === memberId);
-      if (!member) return prevRoom;
+      const member = room.members.get(memberId);
+      if (!member) {
+        toast(`Cannot find member with id ${memberId}`);
+        return prevRoom;
+      }
 
-      let file = room.directoryTree.findNode(path);
-      if (!(file && file instanceof FileNode)) return prevRoom;
+      let file: FileNode | null = room.directoryTree.getFile(path);
+      if (!file) {
+        toast(`Cannot find file with path ${path}`);
+        return prevRoom;
+      }
 
       member.cursorPosition = position;
       member.cursorSelection = selection;
 
       file.lines = fileContent.map((content) => ({ content, tokens: [] }));
 
-      if (sendUpdate)
+      if (sendUpdate) {
         postRoomChanges(
           Messages.FILE_CONTENT_CHANGED,
           path,
-          memberId,
           fileContent,
           position,
           selection
         );
+      }
 
       return room;
     });
@@ -185,11 +210,8 @@ export default function App() {
     setRoom((prevRoom) => {
       const room = { ...prevRoom };
 
-      const member = room.members.find((m) => m.id === memberId);
-      if (!member) return prevRoom;
-
-      let file = room.directoryTree.findNode(path);
-      if (!(file && file instanceof FileNode)) return prevRoom;
+      let file = room.directoryTree.getFile(path);
+      if (!file) return prevRoom;
 
       file.lines = lines;
 
@@ -197,45 +219,17 @@ export default function App() {
     });
   }
 
-  function setMemberCursorOnFile(
-    path: string[],
-    memberId: string,
-    position: CursorPosition,
-    selection: CursorSelection,
-    sendUpdate?: boolean
-  ) {
-    setRoom((prevRoom) => {
-      const room = { ...prevRoom };
-
-      const member = room.members.find((m) => m.id === memberId);
-      if (!member) return prevRoom;
-
-      let file = room.directoryTree.findNode(path);
-      if (!(file && file instanceof FileNode)) return prevRoom;
-
-      member.cursorPosition = position;
-      member.cursorSelection = selection;
-
-      if (sendUpdate)
-        postRoomChanges(
-          Messages.FILE_MEMBER_CURSOR,
-          path,
-          memberId,
-          position,
-          selection
-        );
-
-      return room;
-    });
-  }
-
-  function selectFile(path: string[] | undefined, sendUpdate = true) {
+  function selectFile(path: string[] | null, sendUpdate = true) {
     setRoom((prevRoom) => {
       const room = { ...prevRoom };
 
       if (path) {
-        const file = prevRoom.directoryTree.findNode(path);
-        if (!(file && file instanceof FileNode)) return prevRoom;
+        const file = prevRoom.directoryTree.getFile(path);
+        if (!file) {
+          toast(`Cannot find file with path ${path}`);
+          return prevRoom;
+        }
+
         room.directoryTree.selectedFile = file;
 
         room.members.forEach((m) => {
@@ -246,7 +240,7 @@ export default function App() {
           };
         });
       } else {
-        room.directoryTree.selectedFile = undefined;
+        room.directoryTree.selectedFile = null;
       }
 
       if (sendUpdate) postRoomChanges(Messages.FILE_SELECTED, path);
@@ -255,15 +249,18 @@ export default function App() {
     });
   }
 
-  function selectFolder(path: string[] | undefined, sendUpdate = true) {
+  function selectFolder(path: string[] | null, sendUpdate = true) {
     setRoom((prevRoom) => {
       const room = { ...prevRoom };
       if (path) {
-        const folder = room.directoryTree.findNode(path);
-        if (!(folder && folder instanceof FolderNode)) return prevRoom;
+        const folder = room.directoryTree.getFolder(path);
+        if (!folder) {
+          toast(`Error: Cannot find folder with path "${path}"`);
+          return prevRoom;
+        }
         room.directoryTree.selectedFolder = folder;
       } else {
-        room.directoryTree.selectedFolder = undefined;
+        room.directoryTree.selectedFolder = null;
       }
 
       if (sendUpdate) postRoomChanges(Messages.FOLDER_SELECTED, path);
@@ -273,49 +270,56 @@ export default function App() {
   }
 
   function appendFile(
-    fileName: string,
+    path: string[],
     sendUpdate = true,
     prevRoom = room
-  ): FileNode | undefined {
+  ): FileNode | null {
     const room = { ...prevRoom };
-    const file = room.directoryTree.appendFileToSelectedDir(fileName);
+
+    const file: FileNode | null = room.directoryTree.appendFile(path);
+
+    if (!file) {
+      toast(`Error: ${path.join("/")} file DNE`);
+      return null;
+    }
+
     setRoom(room);
 
-    if (sendUpdate) postRoomChanges(Messages.FILE_CREATED, fileName);
+    if (sendUpdate) postRoomChanges(Messages.FILE_CREATED, path);
 
     return file;
   }
 
-  function changeFileName(
-    nodePath: string[],
-    newName: string,
-    sendUpdate: boolean = true
-  ) {
-    if (!newName) return;
-
+  function changeFileName(path: string[], sendUpdate: boolean = true) {
     setRoom((prevRoom) => {
       const room = { ...prevRoom };
 
-      const node = room.directoryTree.findNode(nodePath);
+      const node = room.directoryTree.getFile(path);
       if (!node) return room;
 
-      node.name = newName;
-      if (sendUpdate) postRoomChanges(Messages.NODE_NAME_CHANGED);
+      node.name = path[path.length - 1];
+      if (sendUpdate) postRoomChanges(Messages.NODE_NAME_CHANGED, path);
 
       return room;
     });
   }
 
   function appendFolder(
-    folderName: string,
+    path: string[],
     sendUpdate = true,
     prevRoom = room
-  ): FolderNode | undefined {
+  ): FolderNode | null {
     const room = { ...prevRoom };
-    const folder = room.directoryTree.appendFolderToSelectedDir(folderName);
+    const folder: FolderNode | null = room.directoryTree.appendFolder(path);
+
+    if (!folder) {
+      toast(`Error: ${path.join("/")} folder DNE`);
+      return null;
+    }
+
     setRoom(room);
 
-    if (sendUpdate) postRoomChanges(Messages.FOLDER_CREATED, folderName);
+    if (sendUpdate) postRoomChanges(Messages.FOLDER_CREATED, path);
 
     return folder;
   }
@@ -369,37 +373,45 @@ export default function App() {
     });
   }
 
+  const { id, directoryTree, currentMember, members } = room;
+
   return client ? (
     <UtilityFunctions.Provider value={{ setFileContent, interpretCode }}>
+      <Toaster />
       <main className="h-screen bg-[#070708] text-white p-2">
         {id ? (
-          <div className="h-100 flex gap-2">
-            <FileManager
-              directoryTree={directoryTree}
-              appendFile={appendFile}
-              selectFile={selectFile}
-              appendFolder={appendFolder}
-              selectFolder={selectFolder}
-              changeFileName={changeFileName}
-            />
-            {directoryTree.selectedFile && (
-              <section className="flex-column">
-                <CodeEditor
-                  members={[...members]}
-                  lines={arrayCopy<Line>(directoryTree.selectedFile.lines)}
-                  path={directoryTree.selectedFile.path}
-                  currentMember={{ ...currentMember }}
-                />
-                <iframe className="output-frame" ref={resultFrameRef} />
-              </section>
-            )}
-          </div>
+          <>
+            <Badge>{id}</Badge>
+            <div className="flex gap-2 max-h-100">
+              <FileManager
+                directoryTree={directoryTree}
+                appendFile={appendFile}
+                selectFile={selectFile}
+                appendFolder={appendFolder}
+                selectFolder={selectFolder}
+                changeFileName={changeFileName}
+              />
+              {directoryTree.selectedFile && (
+                <section className="flex-column">
+                  <CodeEditor
+                    members={[...members.values()]}
+                    lines={directoryTree.selectedFile.lines}
+                    path={directoryTree.selectedFile.path}
+                    currentMember={{ ...currentMember }}
+                  />
+                  <iframe className="output-frame" ref={resultFrameRef} />
+                </section>
+              )}
+            </div>
+          </>
         ) : (
           <div className="h-100 flex items-center justify-center">
             <ConnectionHub
-              clientId={client.id}
-              onClientConnect={(clientToConnectToId: string) =>
-                client.send(Messages.ROOM_JOIN_REQUEST, clientToConnectToId)
+              onRoomCreate={() => {
+                client.send(Messages.ROOM_CREATE);
+              }}
+              onRoomJoin={(roomId: string) =>
+                client.send(Messages.ROOM_JOIN, roomId)
               }
             />
           </div>

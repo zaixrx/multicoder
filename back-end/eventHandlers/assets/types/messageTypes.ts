@@ -1,6 +1,7 @@
 export enum Messages {
-  ROOM_CREATED = "roomCreated",
-  ROOM_JOINED = "roomJoined",
+  NEW_MEMBER = "newMember",
+  ROOM_CREATE = "roomCreate",
+  ROOM_JOIN = "roomJoin",
   FILE_CREATED = "fileCreated",
   FILE_SELECTED = "fileSelected",
   FOLDER_CREATED = "folderCreated",

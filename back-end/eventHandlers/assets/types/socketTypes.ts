@@ -10,7 +10,7 @@ export class Client {
 
   constructor(socket: Socket) {
     this.socket = socket;
-    this.id = socket.id.replace("-", "");
+    this.id = socket.id;
     this._joinedRoom = "";
   }
 
@@ -29,19 +29,27 @@ export class Client {
   }
 
   sendAll(message: Messages, ...data: any[]) {
-    if (this._joinedRoom) this.socket.emit(message, ...data);
+    if (this._joinedRoom)
+      this.socket.to(this._joinedRoom).emit(message, ...data);
   }
 
   broadcast(message: Messages, ...data: any[]) {
-    if (this._joinedRoom)
-      this.socket.broadcast.to(this._joinedRoom).emit(message, data);
+    if (this._joinedRoom) {
+      this.socket.broadcast.to(this._joinedRoom).emit(message, ...data);
+    }
   }
 }
 
 export type EventHandler = {
   [key: string]: {
     eventHandler: (req: Request) => void;
-    middlewares: ((handle: Handle, req: Request) => void)[];
+    middlewares: ((
+      handle: Handle,
+      client: Client,
+      req: Request,
+      ...options: any
+    ) => void)[];
+    options?: any[];
   };
 };
 

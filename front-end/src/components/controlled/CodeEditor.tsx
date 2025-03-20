@@ -1,4 +1,4 @@
-import { Fragment, useContext, useEffect } from "react";
+import { Fragment, useContext } from "react";
 import { UtilityFunctions } from "../../App";
 import { Line } from "../../assets/directoryTree";
 import { Member } from "../../assets/types/roomTypes";
@@ -23,21 +23,9 @@ export interface Chunk {
   members: Member[];
 }
 
-const initializeMember = (member: Member) => {
-  member.cursorPosition = { line: 0, column: 0 };
-  member.cursorSelection = {
-    start: member.cursorPosition,
-    end: member.cursorPosition,
-  };
-};
-
 function CodeEditor({ lines, path, currentMember, members }: Props) {
   const Utility = useContext(UtilityFunctions);
   const dimensions = getCharacterDimensions();
-
-  useEffect(() => {
-    members.forEach(initializeMember);
-  }, []);
 
   const { handleKeyDown } = useEditorActions(Utility, path, lines);
   const { renderSelection } = useEditorRendering(members, lines, dimensions);
@@ -51,6 +39,7 @@ function CodeEditor({ lines, path, currentMember, members }: Props) {
         <div className="w-[50px] bg-[#111]">
           {lines.map((_, i) => (
             <center
+              key={i}
               className={
                 i === currentMember.cursorPosition.line
                   ? `text-gray-200`
@@ -77,14 +66,14 @@ function CodeEditor({ lines, path, currentMember, members }: Props) {
               position={cursorPosition}
             />
           ))}
-          {lines.map((line, lineIndex) => (
-            <Fragment key={lineIndex}>
-              {renderSelection(lineIndex)}
+          {lines.map((line, i) => (
+            <Fragment key={i}>
+              {renderSelection(i)}
               <pre className="line">
                 {line.tokens.length
-                  ? line.tokens.map((token) => {
+                  ? line.tokens.map((token, j) => {
                       return (
-                        <span style={{ color: token.color }}>
+                        <span key={j} style={{ color: token.color }}>
                           {token.content}
                         </span>
                       );

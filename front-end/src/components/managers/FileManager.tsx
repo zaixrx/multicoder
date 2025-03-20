@@ -3,9 +3,10 @@ import _ from "lodash";
 import DirectoryTree, {
   FileNode,
   FolderNode,
-  DirectoryTreeNode,
-  typeOfDirectoryNode,
+  Node,
+  NodeType,
 } from "../../assets/directoryTree";
+
 import Icon from "../common/Icon";
 import { Button } from "../ui/button";
 import { useState } from "react";
@@ -14,15 +15,11 @@ import { Separator } from "@radix-ui/react-separator";
 
 type PropsType = {
   directoryTree: DirectoryTree;
-  appendFile: (fileName: string) => FileNode | undefined;
-  appendFolder: (folderName: string) => FolderNode | undefined;
-  selectFile: (path: string[] | undefined) => void;
-  selectFolder: (path: string[] | undefined) => void;
-  changeFileName: (
-    nodePath: string[],
-    newName: string,
-    sendUpdate?: boolean
-  ) => void;
+  appendFile: (path: string[]) => FileNode | null;
+  appendFolder: (path: string[]) => FolderNode | null;
+  selectFile: (path: string[] | null) => void;
+  selectFolder: (path: string[] | null) => void;
+  changeFileName: (path: string[], sendUpdate?: boolean) => void;
 };
 
 function FileManager({
@@ -34,52 +31,98 @@ function FileManager({
   changeFileName,
 }: PropsType) {
   function createFileInCurrentDirectory(name: string) {
-    appendFile(name);
+    const path = directoryTree.selectedFolder
+      ? [...directoryTree.selectedFolder.path, name]
+      : [name];
+
+    appendFile(path);
   }
 
   function createFolderInCurrentDirectory(name: string) {
-    appendFolder(name);
+    const path = directoryTree.selectedFolder
+      ? [...directoryTree.selectedFolder.path, name]
+      : [name];
+
+    appendFolder(path);
   }
 
-  function selectDirectoryNode(directoryNode: DirectoryTreeNode) {
-    switch (typeOfDirectoryNode(directoryNode)) {
-      case FileNode:
-        selectFile(directoryNode.path);
+  function selectDirectoryNode(node: Node) {
+    switch (node.type) {
+      case NodeType.FILE_NODE:
+        selectFile(node.path);
         break;
 
-      case FolderNode:
-        selectFolder(directoryNode.path);
+      case NodeType.FOLDER_NODE:
+        selectFolder(node.path);
         break;
     }
   }
 
   function renderContent(): React.ReactNode {
-    const nodes: DirectoryTreeNode[] = [];
-    const container = directoryTree.selectedFolder || directoryTree;
+    const nodes: Node[] = [];
+    const { selectedFolder: folder } = directoryTree;
 
-    for (const node in container.children) {
-      nodes.push(container.children[node]);
+    if (folder) {
+      for (const name in folder.children) {
+        const node = directoryTree.getNode([...folder.path, name]);
+        if (node) nodes.push(node);
+      }
+    } else {
+      for (const joinedPath in directoryTree.children) {
+        if (joinedPath.includes("/")) continue;
+
+        const node = directoryTree.getNode([joinedPath]);
+        if (node) nodes.push(node);
+      }
     }
 
-    return nodes.map((node, index) => {
-      return (
-        <DirectoryNodeWrapper
-          key={index}
-          name={node.name}
-          type={typeOfDirectoryNode(node)}
-          selected={directoryTree.selectedFile?.path === node.path}
-          onClick={() => selectDirectoryNode(node)}
-          onSetName={(name: string) => {
-            changeFileName(node.path, name, true);
-            node.name = name;
-          }}
-        />
-      );
-    });
+    return (
+      <div className="max-h-80 overflow-scroll">
+        {directoryTree.selectedFolder && (
+          <div
+            className="cursor-pointer flex border-[#222] py-1 border-b-1 px-2 gap-2"
+            onClick={() => {
+              if (directoryTree.selectedFolder) {
+                let path: string[] | null = directoryTree.selectedFolder.path;
+
+                if (path.length - 1) {
+                  path.pop();
+                } else {
+                  path = null;
+                }
+
+                selectFolder(path);
+              } else {
+                console.log("selecting the null folder");
+                selectFolder(null);
+              }
+            }}
+          >
+            <Icon name="ellipsis.svg" />
+            <span>Back</span>
+          </div>
+        )}
+        {nodes.map((node, index) => {
+          return (
+            <DirectoryNodeWrapper
+              key={index}
+              name={node.name}
+              type={node.type}
+              selected={directoryTree.selectedFile?.path === node.path}
+              onClick={() => selectDirectoryNode(node)}
+              onSetName={(name: string) => {
+                changeFileName([...node.path, name], true);
+                node.name = name;
+              }}
+            />
+          );
+        })}
+      </div>
+    );
   }
 
   return (
-    <div className="h-100 w-[200px] p-2">
+    <div className="w-[200px] p-2">
       <section className="flex gap-1 items-center justify-start">
         <Button onClick={() => createFileInCurrentDirectory("file")}>
           <Icon name="new-file.svg" />
@@ -91,20 +134,6 @@ function FileManager({
       </section>
 
       <Separator className="my-2" />
-
-      {directoryTree.selectedFolder && (
-        <div
-          className="cursor-pointer flex border-[#222] py-1 border-b-1 px-2 gap-2"
-          onClick={() => {
-            if (directoryTree.selectedFolder?.parent)
-              selectFolder(directoryTree.selectedFolder.parent.path);
-            else selectFolder(undefined);
-          }}
-        >
-          <Icon name="ellipsis.svg" />
-          <span>Back</span>
-        </div>
-      )}
 
       {renderContent()}
     </div>
@@ -118,7 +147,7 @@ function DirectoryNodeWrapper({
   onClick,
   onSetName,
 }: any) {
-  const [editMode, setEditMode] = useState<boolean>(true);
+  const [editMode, setEditMode] = useState<boolean>(false);
   const [editName, setEditName] = useState<string>("");
 
   return (
@@ -131,9 +160,9 @@ function DirectoryNodeWrapper({
       <Icon
         name={(() => {
           switch (type) {
-            case FolderNode:
+            case NodeType.FOLDER_NODE:
               return "/folder.svg";
-            case FileNode:
+            case NodeType.FILE_NODE:
               return "/json.svg";
             default:
               return "/";

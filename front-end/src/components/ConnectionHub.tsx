@@ -5,53 +5,57 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "./ui/card";
 import { Label } from "./ui/label";
-import { Badge } from "./ui/badge";
 
 interface ConnectionHubProps {
-  onClientConnect: Function;
-  clientId: string;
+  onRoomJoin: Function;
+  onRoomCreate: Function;
 }
 
-function ConnectionHub({ onClientConnect, clientId }: ConnectionHubProps) {
-  const [clientToConnectId, setClientToConnectId] = useState<string>("");
+function ConnectionHub({ onRoomJoin, onRoomCreate }: ConnectionHubProps) {
+  const [roomId, setRoomId] = useState<string>("");
 
   return (
     <Card className="text-white w-[350px] bg-[#111] border-0 gap-2">
       <CardHeader>
         <CardTitle>Connection Hub</CardTitle>
         <CardDescription>
-          Share your ID <Badge variant="secondary">{clientId}</Badge>
-          and retreive others to connect with each other
+          You can either create a Room, or an already created one.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-8 mt-2">
-          <Label htmlFor="id col-span-1">ID:</Label>
+      <CardContent className="grid grid-cols-10 py-5">
+        <section className="col-span-6 flex flex-col gap-2">
+          <Label htmlFor="id">Room ID:</Label>
           <Input
             id="id"
             type="text"
-            className="col-span-7"
-            value={clientToConnectId}
-            onChange={(e) => setClientToConnectId(e.target.value)}
+            value={roomId}
+            onChange={(e) => setRoomId(e.target.value)}
             placeholder="Eg: PudflolA6KAHxeodAABx"
           />
-        </div>
+          <Button
+            variant="default"
+            onClick={() => {
+              onRoomJoin(roomId);
+            }}
+          >
+            Join
+          </Button>
+        </section>
+        <section className="col-span-4 flex items-end justify-center">
+          <Button
+            variant="default"
+            onClick={() => {
+              onRoomCreate();
+            }}
+          >
+            Create
+          </Button>
+        </section>
       </CardContent>
-      <CardFooter className="flex justify-between">
-        <Button
-          variant="default"
-          onClick={() => {
-            onClientConnect(clientToConnectId);
-          }}
-        >
-          Connect
-        </Button>
-      </CardFooter>
     </Card>
   );
 }

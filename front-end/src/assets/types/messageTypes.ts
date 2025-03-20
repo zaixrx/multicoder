@@ -1,15 +1,16 @@
 export enum Messages {
-  ROOM_JOIN_REQUEST = "roomJoinRequest",
-  ROOM_JOIN_RESPONSE = "roomJoinResponse",
-  ROOM_JOIN_DECLINED = "roomJoinDecliened",
-  ROOM_CREATED = "roomCreated",
+  NEW_MEMBER = "newMember",
+  ROOM_JOIN = "roomJoin",
+  ROOM_CREATE = "roomCreate",
   FILE_CREATED = "fileCreated",
   FILE_SELECTED = "fileSelected",
   FOLDER_CREATED = "folderCreated",
   FOLDER_SELECTED = "folderSelected",
   NODE_NAME_CHANGED = "nodeNameChanged",
-  FILE_MEMBER_CURSOR = "fileMemberCursor",
+  FILE_CONTENT_CHANGED = "fileContentChanged",
   EXECUTE_CODE = "executeCode",
+  CLIENT_DISCONNECTED = "clientDisconnected",
+  ERROR = "error",
 }
 
 export type KeyPress = {

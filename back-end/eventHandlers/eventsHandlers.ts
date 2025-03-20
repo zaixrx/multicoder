@@ -20,7 +20,6 @@ export default (io: Server) => {
   const handle: Handle = { app };
 
   io.on("connection", (socket: Socket) => {
-    console.log("client connected");
     const client: Client = new Client(socket);
 
     const eventsHandlers: EventHandler[] = [
@@ -33,22 +32,34 @@ export default (io: Server) => {
         const handler = eventsHandler[eventName];
 
         client.socket.on(eventName, (...params) => {
-          const req: Request = {
-            params,
-            status: 0,
-            state: {},
-          };
+          try {
+            const req: Request = {
+              params,
+              status: 0,
+              state: {
+                member: app.rooms
+                  .get(client.joinedRoom)
+                  ?.members.get(client.id),
+              },
+            };
 
-          let i = 0;
-          while (req.status === 0 && i < handler.middlewares.length) {
-            handler.middlewares[i](handle, req);
-            i++;
-          }
+            let i = 0;
+            while (req.status === 0 && i < handler.middlewares.length) {
+              if (handler.options) {
+                handler.middlewares[i](handle, client, req, ...handler.options);
+              } else {
+                handler.middlewares[i](handle, client, req);
+              }
+              i++;
+            }
 
-          if (req.status === 0) {
-            handler.eventHandler(req);
-          } else {
-            client.socket.send(Messages.ERROR, req.state.error);
+            if (req.status === 0) {
+              handler.eventHandler(req);
+            } else {
+              client.send(Messages.ERROR, req.state.error);
+            }
+          } catch (error) {
+            console.error(error);
           }
         });
       }

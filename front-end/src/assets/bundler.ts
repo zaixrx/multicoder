@@ -2,7 +2,7 @@ import * as acorn from "acorn";
 import { simple } from "acorn-walk";
 import * as bable from "@babel/standalone";
 
-import DirectoryTree, { FileNode } from "./directoryTree";
+import DirectoryTree from "./directoryTree";
 
 interface Module {
   transpiledCode: string;
@@ -41,11 +41,10 @@ function createModuleGraph(directoryTree: DirectoryTree): Modules {
   }
 
   function traverse(filePath: string): void {
-    const fileNode = directoryTree.findNode(filePath.split("/"));
-    if (!(fileNode && fileNode instanceof FileNode))
-      throw new Error("File doesn't exist");
+    const file = directoryTree.getFile(filePath.split("/"));
+    if (!file) throw new Error("File doesn't exist");
 
-    const code = fileNode.lines.map((l) => l.content).join("\n");
+    const code = file.lines.map((l) => l.content).join("\n");
     const dependencies = getDependencies(code);
 
     if (!dependencies) return;

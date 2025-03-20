@@ -3,14 +3,12 @@ import { Room } from "./roomTypes";
 import { Messages } from "./messageTypes";
 
 export class Client {
-  index: number;
-  socket: Socket;
-  id: string;
+  public id: string;
+  public socket: Socket;
 
-  constructor(socket: Socket, index: number) {
-    this.index = index;
+  constructor(socket: Socket) {
     this.socket = socket;
-    this.id = socket.id?.replace('-', '') || "";
+    this.id = socket.id || "";
   }
 
   send(message: Messages, ...data: any[]) {

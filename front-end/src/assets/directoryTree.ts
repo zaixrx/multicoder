@@ -1,108 +1,116 @@
 import { ThemedToken } from "shiki";
 
-export abstract class DirectoryTreeNode {
-  constructor(
-    public parent: FolderNode | undefined,
-    public name: string,
-    public path: string[]
-  ) {}
-}
-
-export interface Line {
+// User data
+interface Line {
   content: string;
   tokens: ThemedToken[];
 }
 
-export class FileNode extends DirectoryTreeNode {
-  public lines: Line[];
-
-  constructor(parent: FolderNode | undefined, name: string) {
-    super(parent, name, [...(parent?.path || []), name]);
-    this.lines = [{ content: "", tokens: [] }];
-  }
+// Directory Tree Specific
+enum NodeType {
+  FILE_NODE,
+  FOLDER_NODE,
 }
 
-type Children = {
-  [name: string]: DirectoryTreeNode;
-};
+interface Node {
+  type: NodeType;
+  name: string;
+  path: string[];
+}
 
-export class FolderNode extends DirectoryTreeNode {
-  public children: Children;
+interface FileNode extends Node {
+  lines: Line[];
+}
 
-  constructor(parent: FolderNode | undefined, name: string) {
-    super(parent, name, [...(parent?.path || []), name]);
-    this.children = {};
-  }
+interface FolderNode extends Node {
+  children: Record<string, string>;
 }
 
 class DirectoryTree {
-  public children: Children;
-  public entryFile: FileNode | undefined;
-  public selectedFile: FileNode | undefined;
-  public selectedFolder: FolderNode | undefined;
+  public children: Record<string, Node>;
+
+  public entryFile: FileNode | null;
+  public selectedFile: FileNode | null;
+  public selectedFolder: FolderNode | null;
 
   constructor() {
     this.children = {};
+    this.entryFile = null;
+    this.selectedFile = null;
+    this.selectedFolder = null;
   }
 
-  nodeExists = (
-    container: FolderNode | DirectoryTree,
-    name: string
-  ): boolean => {
-    for (const node in container.children) {
-      if (node === name) return true;
-    }
+  joinPath = (path: string[]): string => path.join("/");
 
-    return false;
+  nodeExists = (path: string[]): boolean => {
+    return this.children[this.joinPath(path)] ? true : false;
   };
 
-  appendFileToSelectedDir = (name: string): FileNode | undefined => {
-    const selectedDirectory = this.selectedFolder || this;
-    const originalName = name;
+  appendFile = (path: string[]): FileNode | null => {
+    const name = path.pop();
 
-    let i = 0;
-    while (this.nodeExists(selectedDirectory, name + ".js")) {
-      name = `${originalName}(${i++})`;
-    }
+    if (!name || (path.length && !this.nodeExists(path))) return null;
 
-    name += ".js";
+    const directory = path.length ? this.getFolder(path) : null;
+    path.push(name);
 
-    const fileNode = new FileNode(this.selectedFolder, name);
-    selectedDirectory.children[name] = fileNode;
+    const file: FileNode = {
+      type: NodeType.FILE_NODE,
+      name,
+      path,
+      lines: [{ tokens: [], content: "" }],
+    };
 
-    if (!this.entryFile) this.entryFile = fileNode;
-    return fileNode;
+    this.children[this.joinPath(path)] = file;
+    if (!this.entryFile) this.entryFile = file;
+
+    if (directory) directory.children[name] = name;
+
+    return file;
   };
 
-  appendFolderToSelectedDir = (name: string): FolderNode | undefined => {
-    const selectedDirectory = this.selectedFolder || this;
-    if (this.nodeExists(selectedDirectory, name)) return undefined;
+  appendFolder = (path: string[]): FolderNode | null => {
+    const name = path.pop();
 
-    selectedDirectory.children[name] = new FolderNode(
-      this.selectedFolder,
-      name
-    );
-    return selectedDirectory.children[name] as FolderNode;
+    if (!name || (path.length > 1 && !this.nodeExists(path))) return null;
+
+    const directory = path.length ? this.getFolder(path) : null;
+    path.push(name);
+
+    const folder: FolderNode = {
+      type: NodeType.FOLDER_NODE,
+      name,
+      path,
+      children: {},
+    };
+
+    this.children[this.joinPath(path)] = folder;
+
+    if (directory) directory.children[name] = name;
+
+    return folder;
   };
 
-  findNode = (path: string[]): DirectoryTreeNode | undefined => {
-    if (path.length === 0) return;
+  getNode = (path: string[]): Node | null => {
+    return this.children[this.joinPath(path)] || null;
+  };
 
-    let curr: DirectoryTreeNode = this.children[path[0]],
-      i = 1;
-    while (curr instanceof FolderNode && i < path.length) {
-      curr = curr.children[path[i++]];
-    }
+  getFile = (path: string[]): FileNode | null => {
+    const file = this.children[this.joinPath(path)];
+    return file?.type === NodeType.FILE_NODE ? (file as FileNode) : null;
+  };
 
-    return curr;
+  getFolder = (path: string[]): FolderNode | null => {
+    const folder = this.children[this.joinPath(path)];
+    return folder?.type === NodeType.FOLDER_NODE
+      ? (folder as FolderNode)
+      : null;
+  };
+
+  getNodeParent = (path: string[]): string => {
+    return path.length >= 2 ? path[path.length - 2] : "";
   };
 }
 
-export function typeOfDirectoryNode(node: DirectoryTreeNode) {
-  if (node && typeof node === "object") {
-    if (node instanceof FolderNode) return FolderNode;
-    else if (node instanceof FileNode) return FileNode;
-  }
-}
-
+export { type Node, type FileNode, type FolderNode, type Line, NodeType };
 export default DirectoryTree;

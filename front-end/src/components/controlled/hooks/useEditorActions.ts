@@ -239,8 +239,8 @@ export function useEditorActions(Utility: UFT, path: string[], lines: Line[]) {
     }
 
     Utility.setFileContent(
-      path,
       member.id,
+      path,
       lines.map((l) => l.content),
       position,
       selection,
