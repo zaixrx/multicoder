@@ -9,5 +9,5 @@ export function wakeUpServer(url: string) {
     } catch (error) {
       console.error(error);
     }
-  }, 1000);
+  }, 5 * 60 * 1000);
 }
