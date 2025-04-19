@@ -6,7 +6,7 @@ import {
 } from "../../../assets/types/messageTypes";
 import { EqualPositions, getOrderedSelection } from "../../../assets/utils";
 import Selection from "../../common/Selection";
-import { Line } from "@/assets/directoryTree";
+import { Line } from "../../../assets/directoryTree";
 
 export function useEditorRendering(
   members: Member[],

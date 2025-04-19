@@ -7,7 +7,7 @@ import {
 import { Member } from "../../../assets/types/roomTypes";
 import { getOrderedSelection } from "../../../assets/utils";
 import { UFT } from "../../../App";
-import { Line } from "@/assets/directoryTree";
+import { Line } from "../../../assets/directoryTree";
 
 function isSelecting({ start, end }: CursorSelection): boolean {
   return start.line !== end.line || start.column !== end.column;
