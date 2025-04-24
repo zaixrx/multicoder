@@ -33,5 +33,3 @@ Most collaborative editors are heavy, complex, or built on top of bloated system
 ## License
 
 [MIT](./LICENSE)
-
----
