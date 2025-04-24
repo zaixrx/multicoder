@@ -18,6 +18,8 @@ Stay tuned for the public release.
 - **WebSocket-based** — Minimal bandwidth usage with a blazing fast messaging layer.
 - **Modular and hackable** — Built to be extended and improved as the project evolves.
 
+---
+
 ## Why Multicoder?
 
 Most collaborative editors are heavy, complex, or built on top of bloated systems. **Multicoder** is different:
