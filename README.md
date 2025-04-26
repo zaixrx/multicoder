@@ -1,7 +1,8 @@
 # Warning
 
+
 ⚠️ Multicoder is currently in preview! Things might break but that’s how you know it’s fresh.  
-Stay tuned for the public release.
+Stay tuned for the public release, and I'm willing to move the project from websockets to [WebRTC](https://webrtc.org/).
 
 # Multicoder
 
